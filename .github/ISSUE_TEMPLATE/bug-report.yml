@@ -1,0 +1,43 @@
+name: Bug or compatibility problem
+description: Report a reproducible crash, loading, control, rendering or gameplay issue.
+title: "[Bug] "
+body:
+  - type: input
+    id: build
+    attributes:
+      label: Candidate build and executable hash
+    validations:
+      required: true
+  - type: input
+    id: place
+    attributes:
+      label: Place name, year and original SHA256
+      description: Do not upload the place file or a runtime pack.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Observation scope
+      options:
+        - Native loading only
+        - Partial gameplay
+        - Fully tested gameplay
+        - PC-only result
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected behavior and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Menus, controls, scripts, assets and repeat-loading behavior
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Remove credentials, account information, private paths and server details before including logs.
