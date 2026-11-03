@@ -21,3 +21,6 @@ private/
 build*/
 node_modules/
 __pycache__/
+
+# Local account-service configuration
+/PSVita/assets/site.json

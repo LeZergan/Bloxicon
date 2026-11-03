@@ -1,29 +1,13 @@
-# Development notes
+# Vita source layout
 
-This initial repository contains project documentation, an issue form and a
-self-contained HTML page preview. Engine source, private deployment tooling,
-Git history, credentials, runtime packs, original places and local build
-evidence are excluded.
+| Path | Purpose |
+| --- | --- |
+| `PSVita/renderer`, `PSVita/compat`, `PSVita/src` | Loader, renderer, native controls, and Vita compatibility code |
+| `App`, `Base`, `Network`, `Rendering` | New shared source used by the Vita client |
+| `patches/engine.patch` | Changes to existing engine files at baseline commit `e0cfac59f` |
 
-Build commands and dependency setup will be added when the source distribution
-is ready. The current scaffold does not claim a self-contained engine build.
-Existing dependency authorship and required notices must remain intact when
-code is included.
+On an authorized baseline checkout, apply the engine patch with `git apply --unidiff-zero patches/engine.patch` and overlay the source directories. A Vita build requires VitaSDK and the project's third-party build dependencies. Original runtime and UI assets are supplied separately.
 
-## Checking repository content
+Copy `PSVita/assets/site.example.json` to `PSVita/assets/site.json` and configure your own HTTPS account service before packaging. The example address is a placeholder.
 
-The content gate is read-only and reports categories and file locations without
-printing matched values:
-
-```powershell
-python tools/check-publication.py --identity PRIVATE_IDENTIFIER --forbidden-term EXCLUDED_NAME
-```
-
-Repeat either option for additional private identifiers or excluded names. Git
-metadata is excluded from this working-file check; review staged files and
-commit history separately before pushing future additions.
-
-## Page preview
-
-Open `docs/index.html` locally. It uses embedded styles and local links, with no
-external assets, analytics or deployment workflow. GitHub Pages remains off.
+Run `python tools/check-publication.py` against a source export. Review commit authorship and existing history separately before a public release.

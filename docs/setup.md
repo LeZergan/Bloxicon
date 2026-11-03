@@ -1,17 +1,10 @@
-# Setup status
+# Setup
 
-No installable engine or runtime is distributed in this repository. Hardware
-installation instructions will accompany a separately verified candidate.
+Use an authorized checkout of the baseline engine and apply the Vita source overlay described in [Vita source layout](development.md). Set `VITASDK` and configure the renderer with CMake.
 
-For later authorized device testing:
+```sh
+cmake -S PSVita/renderer -B build-vita -G Ninja -DCMAKE_BUILD_TYPE=Release -DRBX_REUSE_ENGINE_ARCHIVES=OFF
+cmake --build build-vita --target roblox2016_vita_scene_vpk
+```
 
-1. Keep the executable and runtime pack from the same candidate together.
-2. Verify their hashes and preserve backups of the existing pair.
-3. Load original place files without conversion, script removal or per-place
-   modification. Verify original hashes before and after testing.
-4. Preserve profiles, avatar dependencies, music/volume preferences and native
-   controller controls.
-5. Record native loading, partial gameplay and fully tested gameplay separately.
-
-Inspection exports must stay separate from originals and must never be
-installed as replacements. No device installation is performed by this scaffold.
+Use the matching verified runtime data for any hardware test. Preserve profiles, settings, native controller controls, and all original place bytes. Verify original SHA-256 hashes before and after testing, and report native loading, partial gameplay, and fully tested gameplay separately.
