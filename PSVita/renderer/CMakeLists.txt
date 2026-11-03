@@ -510,43 +510,35 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/scene.sfo"
     DEPENDS "${CMAKE_CURRENT_LIST_FILE}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" VERBATIM)
 
-set(RBX_VITA_UI_ASSETS
-    "${RBX_ROOT}/PSVita/assets/site.json"
-    "${RBX_ROOT}/PSVita/assets/branding/bloxicon_logo.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_game@2x.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_game-ON@2x.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_catalog@2x.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_catalog-ON@2x.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_character@2x.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_character-ON@2x.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_settings@2x.png"
-    "${RBX_ROOT}/Android/NativeShell/assets/html/img/icon_settings-ON@2x.png")
-set(RBX_VITA_LIVEAREA_ASSETS
-    "${RBX_ROOT}/PSVita/assets/branding/sce_sys/icon0.png"
-    "${RBX_ROOT}/PSVita/assets/branding/sce_sys/pic0.png"
-    "${RBX_ROOT}/PSVita/assets/branding/sce_sys/livearea/contents/bg.png"
-    "${RBX_ROOT}/PSVita/assets/branding/sce_sys/livearea/contents/startup.png"
-    "${RBX_ROOT}/PSVita/assets/branding/sce_sys/livearea/contents/template.xml")
-
-set(RBX_VITA_PACKAGE_UI_ARGS
-    # The early CPU boot screen must work before archives are mounted.
-    # Normal loader artwork, fonts, controller prompts and music live in packs.
-    -a ../PSVita/assets/branding/bloxicon_logo.png=ui2016/bloxicon_logo.png
-    -a ../PSVita/assets/site.json=site.json)
-set(RBX_VITA_PACKAGE_LIVEAREA_ARGS
-    -a ../PSVita/assets/branding/sce_sys/icon0.png=sce_sys/icon0.png
-    -a ../PSVita/assets/branding/sce_sys/pic0.png=sce_sys/pic0.png
-    -a ../PSVita/assets/branding/sce_sys/livearea/contents/bg.png=sce_sys/livearea/contents/bg.png
-    -a ../PSVita/assets/branding/sce_sys/livearea/contents/startup.png=sce_sys/livearea/contents/startup.png
-    -a ../PSVita/assets/branding/sce_sys/livearea/contents/template.xml=sce_sys/livearea/contents/template.xml)
+set(RBX_VITA_BRANDING "${RBX_ROOT}/PSVita/assets/branding")
+set(RBX_VITA_SITE_CONFIG "${RBX_ROOT}/PSVita/assets/site.json")
+if(NOT EXISTS "${RBX_VITA_SITE_CONFIG}")
+    set(RBX_VITA_SITE_CONFIG "${RBX_ROOT}/PSVita/assets/site.example.json")
+endif()
+set(RBX_VITA_LIVEAREA_FILES
+    icon0.png
+    pic0.png
+    livearea/contents/bg.png
+    livearea/contents/startup.png
+    livearea/contents/template.xml)
+set(RBX_VITA_PACKAGE_INPUTS
+    "${RBX_VITA_SITE_CONFIG}"
+    "${RBX_VITA_BRANDING}/bloxicon_logo.png")
+set(RBX_VITA_PACKAGE_ARGS
+    -a "${RBX_VITA_BRANDING}/bloxicon_logo.png=ui2016/bloxicon_logo.png"
+    -a "${RBX_VITA_SITE_CONFIG}=site.json")
+foreach(file IN LISTS RBX_VITA_LIVEAREA_FILES)
+    list(APPEND RBX_VITA_PACKAGE_INPUTS "${RBX_VITA_BRANDING}/sce_sys/${file}")
+    list(APPEND RBX_VITA_PACKAGE_ARGS -a "${RBX_VITA_BRANDING}/sce_sys/${file}=sce_sys/${file}")
+endforeach()
 
 # App updates contain code and the small title/UI resources only.
 # Runtime data, avatar packs and place indexes deploy separately into ux0:data.
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/roblox2016_vita_scene.vpk"
     COMMAND "${VITASDK}/bin/vita-pack-vpk" -s scene.sfo -b roblox2016_vita_scene.self
-        ${RBX_VITA_PACKAGE_UI_ARGS} ${RBX_VITA_PACKAGE_LIVEAREA_ARGS} roblox2016_vita_scene.vpk
+        ${RBX_VITA_PACKAGE_ARGS} roblox2016_vita_scene.vpk
     DEPENDS roblox2016_vita_scene.self "${CMAKE_CURRENT_BINARY_DIR}/scene.sfo" "${CMAKE_CURRENT_LIST_FILE}"
-        ${RBX_VITA_UI_ASSETS} ${RBX_VITA_LIVEAREA_ASSETS}
+        ${RBX_VITA_PACKAGE_INPUTS}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" VERBATIM)
 add_custom_target(roblox2016_vita_scene_vpk DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/roblox2016_vita_scene.vpk")
 # Preserve the old target name without building an oversized content VPK.

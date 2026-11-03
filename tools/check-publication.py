@@ -1,6 +1,7 @@
 """Scan a source draft without emitting matched values."""
 import argparse
 import getpass
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -23,6 +24,7 @@ patterns = {
 excluded = {".git", "state", "userdata", "evidence", "node_modules", "__pycache__", "deploy"}
 artifacts = {".key", ".vpk", ".pac", ".rbxl", ".rbxlx", ".elf", ".self", ".velf", ".pdb", ".log", ".dmp", ".psp2dmp", ".zip", ".exe"}
 checker = Path(__file__).resolve()
+reviewed_branding = {'PSVita/assets/branding/bloxicon_logo.png': 'b50abd41f9da3843315061451abbaaeb4bb43719a7fa206d212c101eafa5bdb9', 'PSVita/assets/branding/sce_sys/icon0.png': 'c35182117876778d9d9a307e4e47a1e847aca6b1e0a5b09153fc2f9e7af4ffa1', 'PSVita/assets/branding/sce_sys/pic0.png': 'ef113dd58a247012390c85fea79238091dce9955905e7cf06a430282bbf293b0', 'PSVita/assets/branding/sce_sys/livearea/contents/bg.png': '1f11acec7a80f0ce53b583d10b86646adba3cabf2fc401ca295aa94819fcc7a7', 'PSVita/assets/branding/sce_sys/livearea/contents/startup.png': '53bb6f3cfe1ee4c7a6592c19c68e4ddcd224a8571a7e9865ba8b6b1acfc91442'}
 issues = []
 count = 0
 for path in sorted(root.rglob("*")):
@@ -34,6 +36,10 @@ for path in sorted(root.rglob("*")):
     if not path.is_file():
         continue
     count += 1
+    if name in reviewed_branding:
+        if hashlib.sha256(path.read_bytes()).hexdigest() != reviewed_branding[name]:
+            issues.append({"file": name, "category": "branding changed since review"})
+        continue
     try:
         contents = path.read_text(encoding="utf-8-sig")
         if "\0" in contents:

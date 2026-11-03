@@ -4,7 +4,7 @@
 
 An experimental native PlayStation Vita client for original places through 2016. It uses native controller input and implements compatibility in shared loader, renderer, engine, and hosting code.
 
-[Status](docs/status.md) · [Controls](docs/controls.md) · [Setup](docs/setup.md) · [Source layout](docs/development.md) · [Page preview](docs/index.html)
+[Status](docs/status.md) | [Controls](docs/controls.md) | [Setup](docs/setup.md) | [Source layout](docs/development.md) | [Page preview](docs/index.html)
 
 ## Hardware status
 
@@ -19,4 +19,4 @@ An experimental native PlayStation Vita client for original places through 2016.
 
 This repository contains the Vita loader, renderer, native controls, and shared engine changes needed by the Vita client. See [development notes](docs/development.md) for the baseline and build inputs.
 
-Keep bug reports limited to the build identifier, original place SHA-256, reproduction steps, and sanitized observations.
+Open a [bug report](../../issues/new?template=bug-report.yml), select `v1`, and describe the issue in your own words.
