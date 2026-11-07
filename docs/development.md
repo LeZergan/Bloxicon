@@ -20,6 +20,9 @@ complete patch, and writes engine changes only with `--apply`. Removed baseline
 credential values are never stored in this repository or printed. Apply this
 patch through the helper rather than invoking `git apply` directly.
 
+The helper also expresses the baseline loopback entry with the platform's
+symbolic networking constant, keeping literal addresses out of patch removals.
+
 Overlay this repository's `App`, `Base`, `Network`, `Rendering` and `PSVita`
 directories onto that separate checkout. A Vita build requires VitaSDK and the
 project's third-party build dependencies. The small LiveArea and boot branding
@@ -38,6 +41,11 @@ Run `python tools/check-publication.py --history` and Gitleaks against both
 the source tree and all reachable history before pushing. The Gitleaks config
 allows only two reviewed Zstandard SIMD expressions that contain no credentials.
 Commit metadata uses a project identity. The checks never print matched values.
+
+The privacy gate rejects literal IPv4 and IPv6 addresses, including loopback,
+unspecified and documentation examples, in files and reachable Git history.
+The double-colon grammar token in the vendored Luau lexer/printer is language
+syntax and is checked separately from network addresses.
 
 Bloxicon code and modifications are GPL-3.0-only. Preserve all third-party
 notices listed in the repository root.

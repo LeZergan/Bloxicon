@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Validate or apply the client patch without publishing removed baseline secrets."""
 import argparse
+import ipaddress
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
@@ -18,6 +19,15 @@ def run_git(directory, *args, data=None):
 
 def normalize(data):
     return data.decode('utf-8-sig').replace('\r\n', '\n')
+
+def sanitize_loopback(text):
+    def replacement(match):
+        if not ipaddress.ip_address(match.group(1)).is_loopback:
+            raise ValueError('Unexpected baseline address')
+        return ('in_addr bloxiconLoopback = {};\n'
+                '\tbloxiconLoopback.s_addr = htonl(INADDR_LOOPBACK);\n'
+                '\tipAddresses.push_back(std::string(inet_ntoa(bloxiconLoopback)));')
+    return re.sub(r'ipAddresses.push_back\("(\d+(?:\.\d+){3})"\);', replacement, text)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -68,6 +78,8 @@ def main():
                 original, count = DECLARATION.subn(r'\1""', original)
                 if count != 1:
                     raise ValueError('Unexpected legacy telemetry declaration')
+            if name == 'Network/Server.cpp':
+                original = sanitize_loopback(original)
             staged = stage / name
             staged.parent.mkdir(parents=True, exist_ok=True)
             staged.write_bytes(original.encode('utf-8'))

@@ -18,7 +18,7 @@ PATTERNS = {
     'email': r'(?i)(?<![\w.+-])[\w.+-]{1,64}@(?!example\.(?:com|invalid|org)\b)[\w.-]+\.(?:com|net|org|io|me|ru|ae|dev|co|gg)\b',
 }
 IPV4 = re.compile(r'(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])')
-DOC_NETS = ()
+IPV6 = re.compile(r'(?<![A-Za-z0-9_:])(?:[A-Fa-f0-9]{0,4}:){2,}[A-Fa-f0-9]{0,4}(?:%[A-Za-z0-9_.-]+)?(?![A-Za-z0-9_:])')
 FORBIDDEN = {'access', 'private', 'private-release', 'pc-server', 'WindowsPCClient', 'accounts', 'state', 'userdata', 'evidence', 'benchmarks', 'deploy', 'node_modules', '__pycache__'}
 ARTIFACTS = {'.key', '.pem', '.pfx', '.p12', '.vpk', '.pac', '.rbxl', '.rbxlx', '.rbxm', '.rbxmx', '.elf', '.self', '.velf', '.pdb', '.log', '.dmp', '.psp2dmp', '.zip', '.exe', '.db', '.sqlite', '.sqlite3', '.csv', '.har', '.bak'}
 TOP_LEVEL = {'App', 'Base', 'Network', 'Rendering', 'PSVita', 'patches', 'docs', 'tools', '.github'}
@@ -58,13 +58,23 @@ def inspect(name, data, identities, issues, history=False):
     for category, pattern in PATTERNS.items():
         for match in re.finditer(pattern, text):
             report(category, text.count('\n', 0, match.start()) + 1)
-    for match in IPV4.finditer(text):
+    for match in (*IPV4.finditer(text), *IPV6.finditer(text)):
+        # Bare double-colons also appear in grammar rules and inline assembly.
+        # A quoted or bracketed unspecified IPv6 address is still rejected.
+        if match.group() == ':' * 2:
+            line = text[text.rfind('\n', 0, match.start()) + 1:text.find('\n', match.end())]
+            syntax_token = (
+                name == 'PSVita/compat/luau/Ast/src/Lexer.cpp' and 'return "\'' + ':' * 2 + '\'";' in line or
+                name == 'PSVita/compat/luau/Ast/src/PrettyPrinter.cpp' and 'writer.symbol("' + ':' * 2 + '");' in line)
+            quoted = (match.start() > 0 and match.end() < len(text) and
+                      text[match.start() - 1] in '\"\'[' and text[match.end()] in '\"\']')
+            if syntax_token or not quoted:
+                continue
         try:
             address = ipaddress.ip_address(match.group())
         except ValueError:
             continue
-        if not address.is_loopback and not address.is_unspecified and not any(address in net for net in DOC_NETS):
-            report('embedded-network-address', text.count('\n', 0, match.start()) + 1)
+        report('embedded-network-address', text.count('\n', 0, match.start()) + 1)
 
 def git(root, *args, data=None):
     return subprocess.check_output(['git', '-C', str(root), *args], input=data, stderr=subprocess.PIPE)

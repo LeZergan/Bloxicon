@@ -38,7 +38,6 @@ inline bool parseServerIPv4(const std::string& text,std::array<unsigned char,4>&
     return true;
 }
 
-inline bool retiredServerHost(const std::string& host) { return host.empty(); }
 
 inline std::vector<std::string> serverIPv4s(std::istream& input)
 {
@@ -48,7 +47,7 @@ inline std::vector<std::string> serverIPv4s(std::istream& input)
     while(servers.size()<8 && std::getline(input,line))
     {
         if(!line.empty()&&line.back()=='\r')line.pop_back();
-        if(!parseServerIPv4(line,address) || retiredServerHost(line)) continue;
+        if(!parseServerIPv4(line,address)) continue;
         bool duplicate=false;
         for(const auto& server:servers) if(server==line) { duplicate=true; break; }
         if(!duplicate) servers.push_back(line);
@@ -100,7 +99,6 @@ inline bool parseServerEndpoint(std::string text, ServerEndpoint& endpoint) {
         }
         if(!label || text.back()=='-' || text=="localhost")return false;
     }
-    if(retiredServerHost(text))return false;
     parsed.host=text;endpoint=parsed;return true;
 }
 inline std::vector<ServerEndpoint> defaultServerEndpoints() {
@@ -125,7 +123,6 @@ inline std::vector<ServerEndpoint> serverProfiles(std::istream& input) {
         if(line.size()<3 || (line[0]!='0'&&line[0]!='1') || line[1]!='\t')continue;
         const auto tab=line.find('\t',2);
         ServerEndpoint endpoint;if(!parseServerEndpoint(line.substr(2,tab==std::string::npos?tab:tab-2),endpoint))continue;
-        if(retiredServerHost(endpoint.host))continue;
         if(tab!=std::string::npos) {endpoint.name=line.substr(tab+1);if(!validServerName(endpoint.name))continue;}
         // Migrate only the shipped official profile. Preserve an explicit
         // disable, custom hosts and custom names supplied by the user.
@@ -160,7 +157,7 @@ inline std::vector<ServerEndpoint> savedServerEndpoints() {
     while(result.size()<9&&std::getline(legacy,line)) {
         if(!line.empty()&&line.back()=='\r')line.pop_back();
         ServerEndpoint endpoint;
-        if(parseServerEndpoint(line,endpoint)&&!retiredServerHost(endpoint.host)&&std::none_of(result.begin(),result.end(),[&](const ServerEndpoint& e){return e.sameAddress(endpoint);})){result.push_back(endpoint);enableServer(result,result.size()-1);}
+        if(parseServerEndpoint(line,endpoint)&&std::none_of(result.begin(),result.end(),[&](const ServerEndpoint& e){return e.sameAddress(endpoint);})){result.push_back(endpoint);enableServer(result,result.size()-1);}
     }
     return result;
 }

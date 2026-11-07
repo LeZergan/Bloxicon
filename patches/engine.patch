@@ -13716,21 +13716,23 @@ diff --git a/Network/Server.cpp b/Network/Server.cpp
 @@ -35 +39 @@
 -#if !defined(_WIN32)
 +#if !defined(_WIN32) && !defined(RBX_PLATFORM_PSVITA)
-@@ -36,0 +41,4 @@
+@@ -36,0 +41,6 @@
 +#include <netinet/in.h>
 +#include <arpa/inet.h>
 +#elif defined(RBX_PLATFORM_PSVITA)
 +#include <netdb.h>
-@@ -72,0 +81,6 @@
++#include <netinet/in.h>
++#include <arpa/inet.h>
+@@ -72,0 +83,6 @@
 +#ifdef RBX_PLATFORM_PSVITA
 +static const int maxClients = 4;
 +#elif defined(RBX_HEADLESS_SERVER)
 +// Dedicated PC/VPS host: enforce capacity before replication or player scripts.
 +static const int maxClients = RBX::Network::headlessMaxPlayers();
 +#else
-@@ -73,0 +88 @@
+@@ -73,0 +90 @@
 +#endif
-@@ -226,0 +242,15 @@
+@@ -228,0 +246,17 @@
 +#elif defined(RBX_PLATFORM_PSVITA)
 +	char name[255];
 +	if (gethostname(name, sizeof(name)) == 0)
@@ -13745,18 +13747,13 @@ diff --git a/Network/Server.cpp b/Network/Server.cpp
 +			}
 +		}
 +	}
-+	ipAddresses.push_back([]() { in_addr loopback = {}; loopback.s_addr = htonl(INADDR_LOOPBACK); return std::string(inet_ntoa(loopback)); }());
-@@ -278,2 +308,12 @@
++	in_addr bloxiconLoopback = {};
++	bloxiconLoopback.s_addr = htonl(INADDR_LOOPBACK);
++	ipAddresses.push_back(std::string(inet_ntoa(bloxiconLoopback)));
+@@ -280,2 +314,5 @@
 -	RakNet::SocketDescriptor d(port, 0);
 -	res = rakPeer->rawPeer()->Startup(maxClients, &d, 1);
 +		RakNet::SocketDescriptor d(port, 0);
-+#if !defined(RBX_PLATFORM_PSVITA)
-+        // Public Vita games are admitted by the account/TLS gateway. Their
-+        // original RakNet socket must not provide an unauthenticated UDP bypass.
-+        const char* privateGame = std::getenv("RBXV_PRIVATE_GAME");
-+        if (privateGame && std::strcmp(privateGame, "1") == 0)
-+            std::strcpy(d.hostAddress, []() { in_addr loopback = {}; loopback.s_addr = htonl(INADDR_LOOPBACK); return std::string(inet_ntoa(loopback)); }().c_str());
-+#endif
 +#ifdef RBX_PLATFORM_PSVITA
 +        d.extraSocketOptions |= RBX::Network::vitaRakNetSocketOptions();
 +#endif
