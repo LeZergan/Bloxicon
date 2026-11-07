@@ -206,7 +206,7 @@ struct Catalog
     {
         std::vector<const Item*> result;
         for (const auto& entry : items)
-            if (entry.second.category == value && entry.second.listable(testing)) result.push_back(&entry.second);
+            if (entry.second.category == value && entry.second.browseable(testing)) result.push_back(&entry.second);
         std::sort(result.begin(), result.end(), [](const Item* a, const Item* b) {
             return a->name == b->name ? a->id < b->id : a->name < b->name;
         });

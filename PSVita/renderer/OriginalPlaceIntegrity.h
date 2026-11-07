@@ -120,7 +120,7 @@ public:
         return equal&&written;
     }
 };
-inline Audit& current(){static Audit audit("ux0:/data/RBXV00001/system/original-integrity.json");return audit;}
+inline Audit& current(){static Audit audit("ux0:/data/Bloxicon/system/original-integrity.json");return audit;}
 inline void finishSafely(const char* reason) noexcept {
     try{current().finish(reason);}
     catch(...){std::fputs("Vita Original after-hash unavailable; no integrity pass recorded\n",stderr);}

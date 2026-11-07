@@ -1,0 +1,11 @@
+title = "Bloxicon client secret scan"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Zstandard SIMD data_key variables are compression data, not credentials"
+condition = "AND"
+paths = ['''(^|/)PSVita/compat/zstd/zstddeclib\.c$''']
+regexTarget = "line"
+regexes = ['''^\s*__m512i const data_key_(?:lo|hi) = _mm512_srli_epi64 \(data_key, 32\);\s*$''']

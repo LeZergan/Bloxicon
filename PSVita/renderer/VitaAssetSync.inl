@@ -31,9 +31,9 @@ bool publishVerifiedAsset(const std::string& target,const std::string& staged) {
     // Keep old bytes outside the numeric lookup path. Never truncate a cache
     // entry or remove another operation's .download/.previous file.
     if(!VitaBrowser::fileExists(target))return std::rename(staged.c_str(),target.c_str())==0;
-    sceIoMkdir("ux0:/data/RBXV00001/assets/history",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/assets/history",0777);
     const size_t slash=target.find_last_of('/');
-    const std::string previous=uniqueTransferPath("ux0:/data/RBXV00001/assets/history/"+
+    const std::string previous=uniqueTransferPath("ux0:/data/Bloxicon/assets/history/"+
         target.substr(slash+1),".previous");
     if(VitaBrowser::fileExists(previous)||std::rename(target.c_str(),previous.c_str())!=0)return false;
     if(std::rename(staged.c_str(),target.c_str())==0)return true;
@@ -43,8 +43,8 @@ bool publishVerifiedAsset(const std::string& target,const std::string& staged) {
 bool synchronizeServerAssets(VitaAdhoc::Session& session,const VitaAdhoc::DiscoveredHost& host,
                              bool account,const std::function<bool(uint64_t,uint64_t)>& progress,
                              std::string& error) {
-    sceIoMkdir("ux0:/data/RBXV00001",0777);sceIoMkdir("ux0:/data/RBXV00001/assets",0777);
-    VitaOwnedTransferPath metadata(uniqueTransferPath("ux0:/data/RBXV00001/assets/manifest",".download"));
+    sceIoMkdir("ux0:/data/Bloxicon",0777);sceIoMkdir("ux0:/data/Bloxicon/assets",0777);
+    VitaOwnedTransferPath metadata(uniqueTransferPath("ux0:/data/Bloxicon/assets/manifest",".download"));
     if(!session.receiveFile(host,1,metadata.path,progress,error,VitaAdhoc::Transfer::maxManifestBytes))return false;
     metadata.owned=true;
     std::ifstream input(metadata.path.c_str(),std::ios::binary);
@@ -57,7 +57,7 @@ bool synchronizeServerAssets(VitaAdhoc::Session& session,const VitaAdhoc::Discov
     input.close();
     // The whole bounded list is valid before any numeric entry is published.
     for(const auto& entry:entries) {
-        const std::string target="ux0:/data/RBXV00001/assets/"+entry.name;
+        const std::string target="ux0:/data/Bloxicon/assets/"+entry.name;
         bool cancelled=false;
         if(verifiedAssetFile(target,entry,progress,cancelled))continue;
         if(cancelled){error="Transfer cancelled.";return false;}

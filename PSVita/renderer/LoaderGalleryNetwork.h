@@ -4,8 +4,8 @@
 #include "LoaderDetailsNetwork.h"
 
 namespace VitaBrowser {
-inline std::string galleryManifestPath(long long universe){return "ux0:/data/RBXV00001/system/game-info/gallery-"+std::to_string(universe)+".json";}
-inline std::string galleryImagePath(long long universe,long long image){return "ux0:/data/RBXV00001/system/thumbnails/gallery-"+std::to_string(universe)+"-"+std::to_string(image)+".png";}
+inline std::string galleryManifestPath(long long universe){return "ux0:/data/Bloxicon/system/game-info/gallery-"+std::to_string(universe)+".json";}
+inline std::string galleryImagePath(long long universe,long long image){return "ux0:/data/Bloxicon/system/thumbnails/gallery-"+std::to_string(universe)+"-"+std::to_string(image)+".png";}
 inline bool galleryOnline(){
 #ifdef __vita__
     int state=SCE_NETCTL_STATE_DISCONNECTED;return sceNetCtlInetGetState(&state)>=0&&state==SCE_NETCTL_STATE_CONNECTED;
@@ -76,7 +76,7 @@ inline GalleryManifestResult requestGalleryManifest(long long place,long long un
         "&countPerUniverse=4&defaults=false&size=768x432&format=Png&isCircular=false";
     if(fetchPublicJson(url,json,error)&&!cancelled.load(std::memory_order_acquire)&&parseGalleryManifest(json,universe,fetched,error)){
         result.manifest=std::move(fetched);result.json=std::move(json);
-        sceIoMkdir("ux0:/data/RBXV00001/system/game-info",0777);
+        sceIoMkdir("ux0:/data/Bloxicon/system/game-info",0777);
         result.reservation=GalleryCache::reserve(GalleryCache::Manifests,result.path,result.json.size(),cancelled);
         result.fetched=true;
         if(!result.reservation&&!cancelled.load(std::memory_order_acquire))result.error="Screenshot list could not be cached.";
@@ -84,7 +84,7 @@ inline GalleryManifestResult requestGalleryManifest(long long place,long long un
     return result;
 }
 inline Gallery::Manifest publishGalleryManifest(GalleryManifestResult& result){
-    if(result.fetched&&result.reservation){sceIoMkdir("ux0:/data/RBXV00001/system/game-info",0777);
+    if(result.fetched&&result.reservation){sceIoMkdir("ux0:/data/Bloxicon/system/game-info",0777);
         if(!writeAtomic(result.path,result.json))result.error="Screenshot list could not be saved.";}
     result.reservation.reset();
     return result.manifest;

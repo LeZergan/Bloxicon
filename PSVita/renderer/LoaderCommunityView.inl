@@ -29,12 +29,17 @@ inline void drawCommunityScreen(const RuntimeSettings& settings,LoaderInputHints
         std::to_string(client.page.rows.size())+(client.tab==Friends?(client.page.rows.size()==1?" friend":" friends"):
             client.tab==Requests?(client.page.rows.size()==1?" request":" requests"):(client.page.rows.size()==1?" blocked player":" blocked players"));
     uiTextEllipsized(196,72,heading,Design::ink,26,500,true);
+    if(client.busy())drawLoaderActivity(626,84,15,11,3);
     drawCommunityButton({None,client.tab==Find?"Search":client.tab==Conversation?"Older":"Refresh",toolbar(0)},false,!client.busy());
     if(client.tab==Conversation)drawCommunityButton({None,"Latest",toolbar(1)},false,!client.busy());
     if(client.tab==Find&&client.page.more)drawCommunityButton({None,"Next",toolbar(1)},false,!client.busy());
     if(client.tab==Conversation){
         const auto bubbles=conversationBubbles(client.page,client.selected,textPage,[](const std::string& s){return loaderFont().measure(s,20);},&lines);
-        if(bubbles.empty()){uiRoundRect(204,120,744,256,Design::cornerRadius,Design::surface);uiText(228,184,client.busy()?"Loading conversation":"Say hello",Design::ink,28,680,true);}
+        if(bubbles.empty()){
+            uiRoundRect(204,120,744,256,Design::cornerRadius,Design::surface);
+            uiText(228,184,client.busy()?"Loading conversation":"Say hello",Design::ink,28,680,true);
+            if(client.busy())drawLoaderActivity(228,226,25,19,3);
+        }
         for(const auto& bubble:bubbles){const auto& r=bubble.box;const auto& row=client.page.rows[bubble.row];
             uiRoundRect(r.x,r.y,r.w,r.h,Design::cornerRadius,row.mine?Design::focusFill:Design::surface);
             if(focus==Entries&&bubble.row==client.selected)uiFocusFrame(r,Design::focus,Design::cornerRadius);
@@ -45,6 +50,7 @@ inline void drawCommunityScreen(const RuntimeSettings& settings,LoaderInputHints
         uiRoundRect(196,120,752,320,Design::cornerRadius,Design::surface);
         const char* title=client.busy()?"Loading":client.tab==News?"No news yet":client.tab==Requests?"No pending requests":client.tab==Blocked?"No blocked players":client.tab==Find?"Search for a username":"Your friends will appear here";
         uiText(224,160,title,Design::ink,28,696,true);
+        if(client.busy())drawLoaderActivity(224,208,25,19,3);
         if(!client.busy())uiText(224,208,client.tab==Friends?"Find someone to start a conversation.":client.tab==News?"Published posts appear here.":client.tab==Find?"Enter the first three letters or more.":"You're all caught up.",Design::muted,20,696);
     }else{
         const auto count=visibleRows(client.tab),base=client.selected/count*count;

@@ -15,7 +15,7 @@ namespace VitaBrowser { namespace GalleryCache {
 enum Kind { Images, Manifests };
 constexpr size_t imageQuota=64u*1024u*1024u,manifestQuota=4u*1024u*1024u;
 inline const char* directory(Kind kind){return kind==Images?
-    "ux0:/data/RBXV00001/system/thumbnails":"ux0:/data/RBXV00001/system/game-info";}
+    "ux0:/data/Bloxicon/system/thumbnails":"ux0:/data/Bloxicon/system/game-info";}
 inline size_t quota(Kind kind){return kind==Images?imageQuota:manifestQuota;}
 // Match only names this loader generates. No originals, other artwork, user
 // files, temporary downloads or rollback files are eligible for eviction.

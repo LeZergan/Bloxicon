@@ -4,6 +4,7 @@ inline void drawSettings(const RuntimeSettings& settings, size_t selected,
 {
     selected = std::min(selected, size_t(SettingsUI::FieldCount - 1));
     const size_t active = SettingsUI::sectionIndex(selected);
+    const bool signedIn=!playerNameEditable(settings);
     // A quiet rail leaves the selected section obvious without competing cards.
     for (size_t i = SettingsUI::categoryFirst(selected); i < SettingsUI::categoryEnd(selected); ++i)
     {
@@ -32,21 +33,32 @@ inline void drawSettings(const RuntimeSettings& settings, size_t selected,
     {
         const Design::Rect box = SettingsUI::rowRect(i,selected);
         const bool focused = i == selected;
-        const bool accountName=rows[i].field==SettingsUI::PlayerName&&!playerNameEditable(settings);
+        const bool accountName=rows[i].field==SettingsUI::PlayerName&&signedIn;
         uiRoundRect(box.x, box.y, box.w, box.h, 10, focused && !accountName ? Design::focusFill : Design::surface);
         if (focused && !accountName) uiRoundRect(box.x + 4, box.y + 8, 4, box.h - 16, 2, Design::focus);
-        uiTextEllipsized(box.x + 16, box.y + 6, accountName?"Account nickname  /  Locked":rows[i].label, accountName?Design::muted:Design::ink, 20, 476, focused);
-        uiTextEllipsized(box.x + 16, box.y + 30, accountName?"Sign out to use an offline nickname.":rows[i].detail, Design::muted, 18, 476);
         const std::string text = SettingsUI::value(settings, rows[i].field);
         const unsigned color=accountName?Design::muted:rows[i].field==SettingsUI::DiagnosticLogging&&settings.performanceLogging?Design::warning:focused?Design::focus:Design::ink;
-        const float valueSize = loaderFont().measure(text,26,120,true) > 222 ? 18.f : 26.f;
-        const float valueWidth=std::min(222.f,loaderFont().measure(text,valueSize,120,true));
-        uiTextEllipsized(box.x + box.w - 12 - valueWidth, box.y + (box.h-valueSize)*.5f, text, color, valueSize, valueWidth, true);
+        const float valueBudget=std::floor(box.w*(rows[i].field==SettingsUI::PlayerName?.50f:.42f));
+        const auto measure=[&](float size){return loaderFont().measure(text,size,120,true);};
+        const float valueSize=Typography::fitPixels(24,valueBudget,measure);
+        const float valueWidth=std::min(valueBudget,std::ceil(measure(valueSize)));
+        const float labelWidth=box.w-56-valueWidth;
+        uiTextEllipsized(box.x+16,box.y+6,accountName?"Account nickname (locked)":rows[i].label,
+            accountName?Design::muted:Design::ink,20,labelWidth,focused);
+        const char* detail=accountName?"Sign out to edit your offline name.":
+            signedIn && rows[i].field==SettingsUI::AccountConnection?"Signed in to Bloxicon.":rows[i].detail;
+        uiTextEllipsized(box.x+16,box.y+30,detail,Design::muted,18,labelWidth);
+        uiTextEllipsized(box.x+box.w-16-valueWidth,box.y+(box.h-valueSize)*.5f,text,color,valueSize,valueWidth,true);
     }
+    const auto field=rows[selected].field;
+    const bool adjusts=field!=SettingsUI::AccountConnection && field!=SettingsUI::PlayerName &&
+        field!=SettingsUI::BadgeCollection && field!=SettingsUI::PlaceDataManager &&
+        field!=SettingsUI::ContentPacks && field!=SettingsUI::PlaceFixes;
     hints.draw(Design::margin, Design::promptsY, 936, {
-        {RBX::SDLK_GAMEPAD_BUTTONA, selected == SettingsUI::PlayerName ? (playerNameEditable(settings)?"Edit name":"Locked") : selected == SettingsUI::BadgeCollection ? "View badges" : "Change"},
-        {RBX::SDLK_GAMEPAD_DPADLEFT, selected==SettingsUI::PlayerName&&!playerNameEditable(settings)?"":"Adjust", RBX::SDLK_GAMEPAD_DPADRIGHT},
-        {RBX::SDLK_GAMEPAD_BUTTONX, "Description"},
-        {RBX::SDLK_GAMEPAD_BUTTONY, "Defaults"},
+        {RBX::SDLK_GAMEPAD_BUTTONA, field==SettingsUI::PlayerName?(signedIn?"":"Edit name"):
+            field==SettingsUI::BadgeCollection?"View badges":field==SettingsUI::AccountConnection?"Open account":adjusts?"Change":"Open"},
+        {RBX::SDLK_GAMEPAD_DPADLEFT, adjusts?"Adjust":"", RBX::SDLK_GAMEPAD_DPADRIGHT},
+        {RBX::SDLK_GAMEPAD_BUTTONX, "Help"},
+        {RBX::SDLK_GAMEPAD_BUTTONY, "Reset defaults"},
         {RBX::SDLK_GAMEPAD_BUTTONL1, "Tabs", RBX::SDLK_GAMEPAD_BUTTONR1}}, 14);
 }

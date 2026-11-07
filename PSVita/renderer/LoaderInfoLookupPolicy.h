@@ -13,7 +13,7 @@ struct InfoLookupPolicy {
     bool operator!=(const InfoLookupPolicy& p)const{return !(*this==p);}
     static InfoLookupPolicy forPlace(const InfoLookupPolicy& base,const std::string& path){
         if(path.empty())return base;
-        std::ifstream input("ux0:/data/RBXV00001/system/place-settings/"+placeSettingsKey(path)+".cfg");
+        std::ifstream input("ux0:/data/Bloxicon/system/place-settings/"+placeSettingsKey(path)+".cfg");
         std::string line;if(!std::getline(input,line)||line!="place="+path)return base;
         UserPreferences settings;settings.infoLookupMode=base.method;settings.infoTitleMode=base.automaticExactTitle;
         settings.infoRefreshMode=base.alwaysRefresh;settings.downloadGameInfo=base.info;settings.downloadIcons=base.icons;settings.downloadPhotos=base.photos;

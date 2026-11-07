@@ -97,7 +97,7 @@ public:
 #endif
             attempted_[index]=true;
             const char* names[]={"MoveSelection","ButtonPress","ScreenChange","Error"};
-            for(const char* root:{"ux0:/data/RBXV00001/assets/loader-sounds/","app0:/assets/loader-sounds/"}){
+            for(const char* root:{"ux0:/data/Bloxicon/assets/loader-sounds/","app0:/assets/loader-sounds/"}){
                 const auto path=std::string(root)+names[index]+".mp3";
                 if(loadClip(path,&clips_[index]))break;
             }

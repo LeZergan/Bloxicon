@@ -34,14 +34,15 @@ inline std::string profilePath(const std::string& player) {
     const char* data=std::getenv("RBX_PC_USERDATA_DIR");
     return std::string(data&&*data?data:"userdata") + "/badges/" + profileKey(player) + ".v1";
 #else
-    return "ux0:/data/RBXV00001/system/badges/" + profileKey(player) + ".v1";
+    return "ux0:/data/Bloxicon/system/badges/" + profileKey(player) + ".v1";
 #endif
 }
 inline std::mutex& mutex() { static std::mutex value; return value; }
-struct Context { std::string place; int placeId = 0; };
+inline std::string accountProfile(const std::string& id) { return "bloxicon-account:" + id; }
+struct Context { std::string place; int placeId = 0; std::string player, profile; };
 inline Context& context() { static Context value; return value; }
-inline void setPlace(const std::string& name, int placeId) {
-    std::lock_guard<std::mutex> lock(mutex()); context() = {clean(name), placeId};
+inline void setPlace(const std::string& name, int placeId,const std::string& player={},const std::string& profile={}) {
+    std::lock_guard<std::mutex> lock(mutex()); context() = {clean(name), placeId, player, profile};
 }
 class Store {
     std::string path;
@@ -74,12 +75,7 @@ public:
         }
         return input.eof();
     }
-    bool award(int id, const Context& source, long long earned, bool& added) const {
-        added = false; std::vector<Award> values;
-        if (id <= 0 || earned < 0 || !read(values)) return false;
-        for (const auto& value : values) if (value.id == id) return true;
-        if (values.size() >= 2048) return false;
-        values.push_back({id, source.placeId, earned, clean(source.place)});
+    bool write(const std::vector<Award>& values) const {
         const std::string staged = path + ".tmp", backup = path + ".bak";
         {
             std::ofstream output(VitaFileSystem::streamPath(staged), std::ios::binary | std::ios::trunc);
@@ -99,20 +95,47 @@ public:
             if (haveExisting) VitaFileSystem::rename(backup, path);
             VitaFileSystem::remove(staged); return false;
         }
-        added = true; return true;
+        return true;
+    }
+    bool award(int id, const Context& source, long long earned, bool& added) const {
+        added = false; std::vector<Award> values;
+        if (id <= 0 || earned < 0 || !read(values)) return false;
+        for (const auto& value : values) if (value.id == id) return true;
+        if (values.size() >= 2048) return false;
+        values.push_back({id, source.placeId, earned, clean(source.place)});
+        return added = write(values);
     }
 };
 inline bool readProfile(const std::string& player, std::vector<Award>& result) {
     std::lock_guard<std::mutex> lock(mutex()); return Store(profilePath(player)).read(result);
 }
+inline bool mergeProfile(const std::string& player, const std::vector<Award>& awards) {
+    std::lock_guard<std::mutex> lock(mutex());
+    Store store(profilePath(player));
+    std::vector<Award> values;
+    if(!store.read(values))return false;
+    std::set<int> ids;
+    for(const auto& value:values)ids.insert(value.id);
+    const auto old=values.size();
+    for(const auto& award:awards){
+        if(values.size()==2048)break;
+        if(ids.insert(award.id).second)values.push_back(award);
+    }
+    return old==values.size() || store.write(values);
+}
 inline bool has(const std::string& player, int id, bool& result) {
+    std::lock_guard<std::mutex> lock(mutex());
     std::vector<Award> values; result = false;
-    if (!readProfile(player, values)) return false;
+    const auto& key=player==context().player && !context().profile.empty()?context().profile:player;
+    if (!Store(profilePath(key)).read(values)) return false;
+    if(key!=player && std::none_of(values.begin(),values.end(),[&](const Award& value){return value.id==id;}) &&
+       !Store(profilePath(player)).read(values))return false;
     for (const auto& value : values) if (value.id == id) result = true;
     return true;
 }
 inline bool award(const std::string& player, int id, bool& added) {
     std::lock_guard<std::mutex> lock(mutex());
-    return Store(profilePath(player)).award(id, context(), std::max<long long>(0, std::time(NULL)), added);
+    const auto& key=player==context().player && !context().profile.empty()?context().profile:player;
+    return Store(profilePath(key)).award(id, context(), std::max<long long>(0, std::time(NULL)), added);
 }
 } }

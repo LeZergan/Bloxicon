@@ -131,7 +131,7 @@ inline const char* title(Category category)
     case Category::Hat:return "Hats";
     case Category::Hair:return "Hair";
     case Category::Accessory:return "Accessories";
-    case Category::Package:return "Body packages";
+    case Category::Package:return "Packages";
     default:return "Body";
     }
 }

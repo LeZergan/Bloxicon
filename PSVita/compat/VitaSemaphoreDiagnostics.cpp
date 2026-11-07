@@ -27,7 +27,7 @@ void record(const char* operation, int result, const void* caller, int handle = 
         static_cast<unsigned>(memoryResult), static_cast<unsigned>(handle));
     // Native I/O cannot initialize another PTE semaphore. Open failures stay
     // failures; the counters and lastError remain available in the exact ELF.
-    const SceUID file = sceIoOpen("ux0:/data/RBXV00001/system/logs/sema-resource.log",
+    const SceUID file = sceIoOpen("ux0:/data/Bloxicon/system/logs/sema-resource.log",
         SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
     if (file >= 0) {
         if (length > 0) sceIoWrite(file, line, length < static_cast<int>(sizeof(line)) ? length : sizeof(line) - 1);
@@ -44,7 +44,7 @@ extern "C" void vita_pte_failure(const char* operation, int handle, int result,
     const int length = sceClibSnprintf(line, sizeof(line),
         "pte %s handle=0x%08x result=%d unused=%u free_head=%u caller=%p\n",
         operation, static_cast<unsigned>(handle), result, unused, freeHead, caller);
-    const SceUID file = sceIoOpen("ux0:/data/RBXV00001/system/logs/sema-resource.log",
+    const SceUID file = sceIoOpen("ux0:/data/Bloxicon/system/logs/sema-resource.log",
         SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
     if (file >= 0) {
         if (length > 0) sceIoWrite(file, line, length < static_cast<int>(sizeof(line)) ? length : sizeof(line)-1);
@@ -57,7 +57,7 @@ extern "C" void vita_pte_pool_page(unsigned pages, unsigned live, unsigned peak)
     char line[160];
     const int length = sceClibSnprintf(line, sizeof(line),
         "pte page pages=%u live=%u peak=%u\n", pages, live, peak);
-    const SceUID file = sceIoOpen("ux0:/data/RBXV00001/system/logs/sema-resource.log",
+    const SceUID file = sceIoOpen("ux0:/data/Bloxicon/system/logs/sema-resource.log",
         SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
     if (file >= 0) {
         if (length > 0) sceIoWrite(file, line, length);

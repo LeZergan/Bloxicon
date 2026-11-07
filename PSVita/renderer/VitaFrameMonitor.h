@@ -6,6 +6,7 @@
 #include <psp2/io/fcntl.h>
 #include <psp2/kernel/threadmgr.h>
 #include "rbx/VitaJobMonitor.h"
+#include "VitaLoaderDiagnostics.h"
 
 // Independent evidence when the render thread cannot reach its exception handler.
 // This never interrupts a job, times out gameplay, or restarts the process.
@@ -33,8 +34,9 @@ class VitaFrameMonitor
             event, milliseconds(), frame.load(), elapsed, phase.load(),
             renderThread, thread, startResult, result, info.status, info.waitType, info.waitId, info.currentCpuId);
         // Native I/O avoids stderr's lock and heap allocation on a hung thread.
-        SceUID file = sceIoOpen(snapshot ? "ux0:/data/RBXV00001/system/runtime-heartbeat.txt" :
-            "ux0:/data/RBXV00001/system/runtime-stall.txt",
+        VitaLoaderDiagnostics::ensureDirectory();
+        SceUID file = sceIoOpen(snapshot ? "ux0:/data/Bloxicon/system/logs/runtime-heartbeat.txt" :
+            "ux0:/data/Bloxicon/system/logs/runtime-stall.txt",
             SCE_O_WRONLY | SCE_O_CREAT | (snapshot ? SCE_O_TRUNC : SCE_O_APPEND), 0666);
         if (file >= 0)
         {
@@ -62,7 +64,8 @@ class VitaFrameMonitor
         VitaFrameMonitor& self = **static_cast<VitaFrameMonitor**>(args);
         bool reported = false;
         unsigned records = 0;
-        self.writeEvidence("monitor_started", 0);
+        if(VitaLoaderDiagnostics::detailed().load(std::memory_order_relaxed))
+            self.writeEvidence("monitor_started", 0);
         uint32_t lastSnapshot = milliseconds();
         while (self.running.load())
         {
@@ -72,7 +75,7 @@ class VitaFrameMonitor
                 const uint32_t elapsed = milliseconds() - lastFrame;
                 const bool stalled = elapsed >= 15000;
                 const uint32_t now = milliseconds();
-                if (now - lastSnapshot >= 5000)
+                if (now - lastSnapshot >= 5000&&VitaLoaderDiagnostics::detailed().load(std::memory_order_relaxed))
                 {
                     self.writeEvidence("monitor_heartbeat", elapsed, true);
                     lastSnapshot = now;
@@ -94,10 +97,8 @@ public:
         : phase(initialPhase), heartbeat(0), frame(0), active(false), running(true),
           thread(-1), renderThread(sceKernelGetThreadId())
     {
-        SceUID file = sceIoOpen("ux0:/data/RBXV00001/system/runtime-stall.txt",
-            SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
-        if (file >= 0) sceIoClose(file);
-        writeEvidence("monitor_initializing", 0, true);
+        if(VitaLoaderDiagnostics::detailed().load(std::memory_order_relaxed))
+            writeEvidence("monitor_initializing", 0, true);
         thread = sceKernelCreateThread("rbx_frame_monitor", monitorThread, 0x10000100,
             0x4000, 0, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, NULL);
         if (thread >= 0)

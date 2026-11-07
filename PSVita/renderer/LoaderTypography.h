@@ -5,8 +5,7 @@
 
 namespace VitaBrowser { namespace Typography {
 
-// Rasterize the shipped Source Sans faces at the actual display size. The
-// minimum applies to captions too: shrinking a 32px atlas made these illegible.
+// Rasterize the loader faces at native display sizes. Captions use at least 18px.
 static const std::array<unsigned, 8> sizes = {{16, 18, 20, 22, 24, 26, 28, 32}};
 static const unsigned atlasWidth = 1024;
 static const unsigned atlasHeight = 512;
@@ -22,6 +21,14 @@ inline size_t sizeIndex(float requested)
 inline unsigned pixels(float requested)
 {
     return sizes[sizeIndex(requested)];
+}
+
+template<class Measure>
+inline float fitPixels(float requested,float width,Measure measure)
+{
+    size_t index=sizeIndex(requested);
+    while(index>1 && measure(float(sizes[index]))>width)--index;
+    return float(sizes[index]);
 }
 
 } }

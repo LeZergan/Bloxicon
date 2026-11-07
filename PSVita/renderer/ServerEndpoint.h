@@ -10,7 +10,7 @@
 namespace VitaAdhoc {
 inline const char* serverEndpointPath()
 {
-    return "ux0:/data/RBXV00001/system/server-ip.txt";
+    return "ux0:/data/Bloxicon/system/server-ip.txt";
 }
 
 inline bool parseServerIPv4(const std::string& text,std::array<unsigned char,4>& octets)
@@ -69,7 +69,7 @@ struct ServerEndpoint {
     std::string text() const { return host+":"+std::to_string(port); }
     bool sameAddress(const ServerEndpoint& other) const { return host==other.host && port==other.port; }
 };
-inline const char* serverProfilesPath() { return "ux0:/data/RBXV00001/system/servers.v2"; }
+inline const char* serverProfilesPath() { return "ux0:/data/Bloxicon/system/servers.v2"; }
 inline bool parseServerEndpoint(std::string text, ServerEndpoint& endpoint) {
     const auto first=text.find_first_not_of(" \t\r\n");
     if(first==std::string::npos)return false;

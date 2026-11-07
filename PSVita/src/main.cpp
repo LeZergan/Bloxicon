@@ -84,7 +84,7 @@ void runtimeLog(const char* format, ...)
 {
     if (!gRuntimeLog)
     {
-        gRuntimeLog = std::fopen("ux0:/data/RBXV00001_runtime.log", "a");
+        gRuntimeLog = std::fopen("ux0:/data/Bloxicon_runtime.log", "a");
     }
 
     if (!gRuntimeLog)

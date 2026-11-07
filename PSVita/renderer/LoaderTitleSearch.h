@@ -83,7 +83,7 @@ inline bool verifyTitleCandidate(const TitleSearch::Candidate& candidate,const s
     if(!parsePublicUniverseMetadata(json,universe,error)||universe!=candidate.universeId){error="This title result no longer matches its game. Search again.";return false;}
     return true;
 }
-inline std::string titleChoicePath(const std::string& path){return "ux0:/data/RBXV00001/system/game-info/"+artworkKey(path)+".title-choice";}
+inline std::string titleChoicePath(const std::string& path){return "ux0:/data/Bloxicon/system/game-info/"+artworkKey(path)+".title-choice";}
 inline bool readTitleChoice(const std::string& path,const std::string& query,TitleSearch::Candidate& choice,std::string* savedQueryOut=nullptr){
     MetadataPolicy::Document doc;TitleSearch::Candidate parsed;std::string savedQuery;
     if(path.empty()||!doc.read(titleChoicePath(path),4096)||doc.text("version")!="1"||!metadataBinding(doc,path)||
@@ -98,6 +98,6 @@ inline bool writeTitleChoice(const std::string& path,const std::string& query,co
         query.find_first_of("\r\n\0",0,3)!=std::string::npos||choice.name.find_first_of("\r\n\0",0,3)!=std::string::npos||choice.creator.find_first_of("\r\n\0",0,3)!=std::string::npos)return false;
     std::ostringstream text;text<<"version=1\nquery_hex="<<GameInfo::encode(query)<<"\nplace_id="<<choice.placeId<<"\nuniverse_id="<<choice.universeId
         <<"\nname_hex="<<GameInfo::encode(choice.name)<<"\ncreator_hex="<<GameInfo::encode(choice.creator)<<'\n';writeMetadataBinding(text,path);
-    sceIoMkdir("ux0:/data/RBXV00001/system/game-info",0777);return writeAtomic(titleChoicePath(path),text.str());
+    sceIoMkdir("ux0:/data/Bloxicon/system/game-info",0777);return writeAtomic(titleChoicePath(path),text.str());
 }
 }

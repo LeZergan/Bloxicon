@@ -4,7 +4,7 @@
 #include <set>
 
 namespace VitaAvatar {
-inline const char* profilePath() { return "ux0:/data/RBXV00001/system/avatar/profile.v1"; }
+inline const char* profilePath() { return "ux0:/data/Bloxicon/system/avatar/profile.v1"; }
 static const size_t kMaxProfileBytes = 16384;
 static const size_t kMaxEquippedAccessories = 8;
 inline const char* noFaceId() { return "__no_face"; }

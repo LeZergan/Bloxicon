@@ -31,7 +31,8 @@ bool showPlaceStorageActions(Sampler& sampler,const RuntimeSettings& settings,co
             if(!confirming){confirming=true;message.clear();}
             else {const auto path=place.path;const unsigned action=unsigned(selected);
                 pending=operation.start(scheduleCacheSizeTask,[path,action](const std::atomic<bool>&){return PlaceStorage::execute(path,action);});
-                if(!pending){confirming=false;message="Storage is busy. Try again.";}}
+                confirming=false;
+                if(!pending)message="Storage is busy. Try again.";}
             previous=~0u;
         }
 #ifdef __vita__

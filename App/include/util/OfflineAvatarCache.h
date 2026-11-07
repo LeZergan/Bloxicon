@@ -5,7 +5,7 @@ namespace RBX { namespace OfflineAvatarCache {
 inline bool validHash(const std::string& hash) { return hash.size()==64 && hash.find_first_not_of("0123456789abcdef")==std::string::npos; }
 inline boost::filesystem::path directory() {
 #ifdef RBX_PLATFORM_PSVITA
-    return boost::filesystem::path("ux0:/data/RBXV00001/system/avatar/network");
+    return boost::filesystem::path("ux0:/data/Bloxicon/system/avatar/network");
 #else
     return boost::filesystem::temp_directory_path()/"rbxv-avatars";
 #endif

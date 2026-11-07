@@ -1,6 +1,8 @@
 #include <netdb.h>
+#include <sys/socket.h>
 #include <cstring>
 #include <mutex>
+#include "VitaOfficialEndpoint.h"
 
 extern "C" struct hostent* __real_gethostbyname(const char* name);
 
@@ -14,23 +16,34 @@ extern "C" struct hostent* __wrap_gethostbyname(const char* name)
     struct Record {
         hostent entry{};
         char name[512]{};
-        unsigned char address[4]{};
-        char* addresses[2]{};
+        unsigned char address[2][4]{};
+        char* addresses[3]{};
     };
     static thread_local Record copy;
     std::lock_guard<std::mutex> lock(gate);
     hostent* resolved = __real_gethostbyname(name);
-    if (!resolved) return nullptr;
-    if (resolved->h_length != 4 || !resolved->h_addr_list || !resolved->h_addr_list[0])
-        return nullptr;
-    copy.entry = *resolved;
-    std::strncpy(copy.name, resolved->h_name ? resolved->h_name : "", sizeof(copy.name)-1);
+    const bool systemAddress=resolved&&resolved->h_length==4&&resolved->h_addr_list&&resolved->h_addr_list[0];
+    const bool official=VitaOfficialEndpoint::matches(name);
+    if(!systemAddress&&!official)return nullptr;
+    const auto* canonical=official?VitaOfficialEndpoint::host:resolved->h_name;
+    std::strncpy(copy.name,canonical?canonical:"",sizeof(copy.name)-1);
     copy.name[sizeof(copy.name)-1] = 0;
-    std::memcpy(copy.address, resolved->h_addr_list[0], sizeof(copy.address));
-    copy.addresses[0] = reinterpret_cast<char*>(copy.address);
-    copy.addresses[1] = nullptr;
+    unsigned count=0;
+    if(official){
+        std::memcpy(copy.address[count],VitaOfficialEndpoint::ipv4.data(),4);
+        copy.addresses[count]=reinterpret_cast<char*>(copy.address[count]);
+        ++count;
+    }
+    if(systemAddress&&(!official||std::memcmp(copy.address[0],resolved->h_addr_list[0],4)!=0)){
+        std::memcpy(copy.address[count],resolved->h_addr_list[0],4);
+        copy.addresses[count]=reinterpret_cast<char*>(copy.address[count]);
+        ++count;
+    }
+    copy.addresses[count]=nullptr;
     copy.entry.h_name = copy.name;
     copy.entry.h_aliases = nullptr;
+    copy.entry.h_addrtype = official ? AF_INET : resolved->h_addrtype;
+    copy.entry.h_length = 4;
     copy.entry.h_addr_list = copy.addresses;
     return &copy.entry;
 }

@@ -26,7 +26,7 @@ inline void matching(std::vector<Target>& plan,const std::string& root,const std
     closedir(dir);
 }
 inline std::vector<Target> plan(const std::string& path,unsigned action) {
-    const std::string system="ux0:/data/RBXV00001/system",places="ux0:/data/RBXV00001/places";
+    const std::string system="ux0:/data/Bloxicon/system",places="ux0:/data/Bloxicon/places";
     const auto saves=placeDataRoot(path),key=placeDataKey(path),art=artworkKey(path);
     std::vector<Target> result;
     if(action==Progress||action==Everything)for(const char* type:{"standard","sorted","legacy"})add(result,saves+"/"+type,system);
@@ -72,7 +72,7 @@ inline std::string execute(const std::string& path,unsigned action) {
 }
 inline std::vector<Place> entries(const std::vector<Place>& installed) {
     auto result=installed;
-    const std::string root="ux0:/data/RBXV00001/system/local-saves/v1";
+    const std::string root="ux0:/data/Bloxicon/system/local-saves/v1";
     DIR* dir=opendir(root.c_str());if(!dir)return result;
     while(const auto entry=readdir(dir)) {
         const std::string key=entry->d_name;

@@ -5,6 +5,7 @@
 #include "CatalogDownloadPolicy.h"
 #include "OwnedPlaceCatalog.h"
 #include "HostedPlaceMetadata.h"
+#include "LoaderDataStore.h"
 #pragma once
 #if defined(RBX_PLATFORM_PSVITA)
 #include "util/VitaHttpRequestPolicy.h"
@@ -793,19 +794,19 @@ inline bool readInstallMetadata(const std::string& placePath, InstalledPlaceMeta
 
 inline std::string runtimeIdentityPath(const std::string& placePath)
 {
-    return "ux0:/data/RBXV00001/system/game-info/"+artworkKey(placePath)+".runtime";
+    return "ux0:/data/Bloxicon/system/game-info/"+artworkKey(placePath)+".runtime";
 }
 
 inline std::string publicMetadataPath(const std::string& placePath,long long placeId=0)
 {
-    if(placePath.empty()&&placeId>0)return "ux0:/data/RBXV00001/system/game-info/online-"+std::to_string(placeId)+".details";
-    return "ux0:/data/RBXV00001/system/game-info/" + artworkKey(placePath) + ".details";
+    if(placePath.empty()&&placeId>0)return "ux0:/data/Bloxicon/system/game-info/online-"+std::to_string(placeId)+".details";
+    return "ux0:/data/Bloxicon/system/game-info/" + artworkKey(placePath) + ".details";
 }
 
 inline std::string publicThumbnailPath(const std::string& placePath,long long placeId=0)
 {
-    if(placeId>0)return "ux0:/data/RBXV00001/system/thumbnails/public-v2-"+artworkKey(placePath)+"-"+std::to_string(placeId)+".png";
-    return "ux0:/data/RBXV00001/system/thumbnails/public-"+artworkKey(placePath)+".png";
+    if(placeId>0)return "ux0:/data/Bloxicon/system/thumbnails/public-v2-"+artworkKey(placePath)+"-"+std::to_string(placeId)+".png";
+    return "ux0:/data/Bloxicon/system/thumbnails/public-"+artworkKey(placePath)+".png";
 }
 
 inline std::string metadataSingleLine(std::string value)
@@ -839,8 +840,8 @@ inline bool writePlaceRuntimeIdentity(const std::string& placePath, long long pl
         << "creator_id=" << creatorId << '\n'
         << "creator_type=" << creatorType << '\n';
     writeMetadataBinding(text,placePath);
-    sceIoMkdir("ux0:/data/RBXV00001/system",0777);
-    sceIoMkdir("ux0:/data/RBXV00001/system/game-info",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system/game-info",0777);
     return writeAtomic(runtimeIdentityPath(placePath), text.str());
 }
 
@@ -868,8 +869,8 @@ inline bool writePublicPlaceMetadata(const std::string& placePath, const PublicP
 {
     if (details.placeId <= 0 || details.universeId <= 0)
         return false;
-    sceIoMkdir("ux0:/data/RBXV00001/system",0777);
-    sceIoMkdir("ux0:/data/RBXV00001/system/game-info",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system/game-info",0777);
 
     std::ostringstream text;
     text << "version=2\n"
@@ -1234,7 +1235,7 @@ inline std::string catalogStableSource(const std::string& url,const std::string&
 
 inline std::string catalogInstallPath(const CatalogItem& item)
 {
-    const std::string legacy="ux0:/data/RBXV00001/places/" + safeFileName(item.name);
+    const std::string legacy="ux0:/data/Bloxicon/places/" + safeFileName(item.name);
     InstalledPlaceMetadata old;
     if(fileExists(legacy) && readInstallMetadata(legacy,old) && catalogStableSource(old.item.url,old.item.name)==catalogStableSource(item.url,item.name)) return legacy;
     uint64_t hash=1469598103934665603ULL;
@@ -1243,7 +1244,7 @@ inline std::string catalogInstallPath(const CatalogItem& item)
     std::string folder=safeFileName(item.name);
     const auto dot=folder.find_last_of('.');if(dot!=std::string::npos)folder.resize(dot);
     if(folder.size()>72)folder.resize(72);
-    return "ux0:/data/RBXV00001/places/"+folder+"-"+key.str()+"/"+safeFileName(item.name);
+    return "ux0:/data/Bloxicon/places/"+folder+"-"+key.str()+"/"+safeFileName(item.name);
 }
 
 inline size_t catalogRetainedDownloadBytes(const CatalogItem& item)
@@ -1300,7 +1301,7 @@ inline const CatalogItem* findCatalogItemForInstalled(const std::string& placePa
 
 inline bool isUserInstalledPlacePath(const std::string& path)
 {
-    static const std::string root = "ux0:/data/RBXV00001/places/";
+    static const std::string root = "ux0:/data/Bloxicon/places/";
     if(path.compare(0,root.size(),root)!=0)return false;
     const auto relative=path.substr(root.size());
     if(relative.empty()||relative.find_first_of("\\:\0",0,3)!=std::string::npos)return false;
@@ -1339,10 +1340,10 @@ inline bool removeInstalledPlace(const std::string& path, std::string& status)
     return true;
 }
 
-inline std::vector<std::string> readNameList(const char* path)
+inline std::vector<std::string> readNameList(LoaderRecord record)
 {
     std::vector<std::string> result;
-    std::ifstream input(path);
+    std::istringstream input(loaderData().get(record));
     std::string line;
     while (std::getline(input, line))
         if (!line.empty())
@@ -1359,22 +1360,22 @@ inline bool nameListContains(const std::vector<std::string>& values, const std::
     return false;
 }
 
-inline bool writeNameList(const char* path, const std::vector<std::string>& values)
+inline bool writeNameList(LoaderRecord record, const std::vector<std::string>& values)
 {
     std::ostringstream text;
     for (const std::string& value : values)
         text << metadataValue(value) << '\n';
-    return writeAtomic(path, text.str());
+    return loaderData().set(record,text.str());
 }
 
 inline bool isFavorite(const std::string& name)
 {
-    return nameListContains(readNameList("ux0:/data/RBXV00001/system/favorites.txt"), name);
+    return nameListContains(readNameList(LoaderRecord::Favorites), name);
 }
 
 inline bool toggleFavorite(const std::string& name)
 {
-    std::vector<std::string> values = readNameList("ux0:/data/RBXV00001/system/favorites.txt");
+    std::vector<std::string> values = readNameList(LoaderRecord::Favorites);
     const std::string key = lowerCopy(name);
     bool removed = false;
     for (std::vector<std::string>::iterator it = values.begin(); it != values.end(); ++it)
@@ -1386,26 +1387,30 @@ inline bool toggleFavorite(const std::string& name)
         }
     if (!removed)
         values.insert(values.begin(), name);
-    writeNameList("ux0:/data/RBXV00001/system/favorites.txt", values);
+    if(!writeNameList(LoaderRecord::Favorites,values))return removed;
     return !removed;
 }
 
-inline void noteRecent(const std::string& name)
+inline void noteRecent(const std::string& path, const std::string& name)
 {
-    std::vector<std::string> values = readNameList("ux0:/data/RBXV00001/system/recent-games.txt");
+    if (path.empty()) return;
+    std::vector<std::string> values = readNameList(LoaderRecord::Recent);
+    if (!values.empty() && values.front() == path) return;
     const std::string key = lowerCopy(name);
+    const std::string filename = lowerCopy(path.substr(path.find_last_of("/\\")+1));
     values.erase(std::remove_if(values.begin(), values.end(), [&](const std::string& value) {
-        return lowerCopy(value) == key;
+        const auto previous=lowerCopy(value);
+        return value == path || previous == key || previous == filename;
     }), values.end());
-    values.insert(values.begin(), name);
+    values.insert(values.begin(), path);
     if (values.size() > 12)
         values.resize(12);
-    writeNameList("ux0:/data/RBXV00001/system/recent-games.txt", values);
+    writeNameList(LoaderRecord::Recent,values);
 }
 
 inline bool isRecent(const std::string& name)
 {
-    return nameListContains(readNameList("ux0:/data/RBXV00001/system/recent-games.txt"), name);
+    return nameListContains(readNameList(LoaderRecord::Recent), name);
 }
 
 using CatalogNameIndex=std::map<std::string,size_t>;
@@ -1463,7 +1468,7 @@ inline void appendUniqueCatalogItem(std::vector<CatalogItem>& out, const Catalog
 
 inline void appendBundledCatalog(std::vector<CatalogItem>& out,CatalogNameIndex* index=NULL)
 {
-    std::ifstream input("ux0:/data/RBXV00001/system/catalog/places.v2",std::ios::binary);
+    std::ifstream input("ux0:/data/Bloxicon/system/catalog/places.v2",std::ios::binary);
     if(!input.is_open()){input.clear();input.open("app0:/catalog/places.v2",std::ios::binary);}
     std::string line;std::getline(input,line);
     if(line!="RBXV_PLACE_INDEX\t2")return;
@@ -1488,7 +1493,7 @@ inline void appendSeedCatalog(std::vector<CatalogItem>& out, CatalogNameIndex* i
     // the Vita browse a large known-safe public archive immediately even when
     // GitHub's metadata API is rate-limited/offline; the place bytes still
     // download directly on the Vita when the user presses Install.
-    std::ifstream input("ux0:/data/RBXV00001/system/catalog-seed.txt");
+    std::ifstream input("ux0:/data/Bloxicon/system/catalog-seed.txt");
     std::string line;
     while (std::getline(input, line))
     {
@@ -1942,8 +1947,8 @@ inline bool enrichOfficialArchiveMetadata(std::vector<CatalogItem>& items, bool 
     static const char* url =
         "https://raw.githubusercontent.com/tropicalbananas/robloxplacearchive/main/LIST.md";
     static const char* cache =
-        "ux0:/data/RBXV00001/system/catalog-cache-official-place-archive-list.md";
-    static const char* builtin="ux0:/data/RBXV00001/system/catalog/historical-ids.md";
+        "ux0:/data/Bloxicon/system/catalog-cache-official-place-archive-list.md";
+    static const char* builtin="ux0:/data/Bloxicon/system/catalog/historical-ids.md";
     std::string cached;
     const bool haveCache = fileSize(cache)<=1024u*1024u&&readCatalogCache(cache, cached);
 
@@ -2021,7 +2026,7 @@ inline bool enrichOfficialPlaceIcons(std::vector<CatalogItem>& items, bool force
 #endif
 
     static const char* cache =
-        "ux0:/data/RBXV00001/system/catalog-cache-official-place-icons.json";
+        "ux0:/data/Bloxicon/system/catalog-cache-official-place-icons.json";
     std::string cached;
     const bool haveCache = readCatalogCache(cache, cached);
     if ((!forceRefresh || policy.cacheOnly) && haveCache)
@@ -2062,8 +2067,8 @@ inline bool enrichOfficialPlaceIcons(std::vector<CatalogItem>& items, bool force
 inline std::string thumbnailCachePath(const CatalogItem& item)
 {
     if(CatalogDownloadPolicy::ownedObject(item.url))
-        return "ux0:/data/RBXV00001/system/thumbnails/hosted-"+item.url.substr(item.url.size()-64)+"-"+artworkKey(item.thumbnailUrl)+".image";
-    return item.thumbnailUrl.empty()?std::string():"ux0:/data/RBXV00001/system/thumbnails/hosted-"+artworkKey(item.url+"\n"+item.thumbnailUrl)+".image";
+        return "ux0:/data/Bloxicon/system/thumbnails/hosted-"+item.url.substr(item.url.size()-64)+"-"+artworkKey(item.thumbnailUrl)+".image";
+    return item.thumbnailUrl.empty()?std::string():"ux0:/data/Bloxicon/system/thumbnails/hosted-"+artworkKey(item.url+"\n"+item.thumbnailUrl)+".image";
 }
 inline bool validCachedPng(const std::string& path)
 {
@@ -2082,8 +2087,8 @@ inline bool ensureThumbnailCached(const CatalogItem& item, std::string& path, st
     if (validCachedPng(path))
         return true;
 
-    sceIoMkdir("ux0:/data/RBXV00001", 0777);
-    sceIoMkdir("ux0:/data/RBXV00001/system/thumbnails", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system/thumbnails", 0777);
     const std::string staged = path + ".download";
     size_t bytes = 0;
 #if defined(RBX_PLATFORM_PSVITA)
@@ -2112,42 +2117,49 @@ inline bool ensureThumbnailCached(const CatalogItem& item, std::string& path, st
 
 inline CatalogDownloadPolicy::ProviderHealth catalogProviderHealth()
 {
-    std::ifstream input("ux0:/data/RBXV00001/system/provider-health.v1");
-    if(!input){input.clear();input.open("ux0:/data/RBXV00001/system/catalog/provider-health.v1");}
+    std::ifstream input("ux0:/data/Bloxicon/system/provider-health.v1");
+    if(!input){input.clear();input.open("ux0:/data/Bloxicon/system/catalog/provider-health.v1");}
     return CatalogDownloadPolicy::readProviderHealth(input);
+}
+
+inline void ensureLiveCatalogueDirectory(bool pages=false)
+{
+    sceIoMkdir("ux0:/data/Bloxicon/system/catalog",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system/catalog/live",0777);
+    if(pages)sceIoMkdir("ux0:/data/Bloxicon/system/catalog/live/pool-pages",0777);
 }
 
 inline void enrichOwnedCatalogue(std::vector<CatalogItem>& items,const CatalogRequestPolicy& policy)
 {
-    const std::string cache="ux0:/data/RBXV00001/system/catalog/pool-curation.json";
+    const std::string cache="ux0:/data/Bloxicon/system/catalog/live/pool-curation.json";
+    recoverAtomicTarget(cache);
     std::string saved;readCatalogCache(cache,saved);
+    if(saved.empty())readCatalogCache("ux0:/data/Bloxicon/system/catalog/pool-curation.json",saved);
     if(saved.empty())readCatalogCache("app0:/catalog/pool-curation.json",saved);
     if(policy.mayFetch()){
         std::string fresh,error;
         if(fetchExternal(std::string(CatalogDownloadPolicy::poolOrigin())+"/place-pool/vita/curation.json",fresh,error)&&
            !policy.stopped()&&OwnedPlaceCatalog::applyCuration(fresh,items)){
-            writeAtomic(cache,fresh);return;
+            if(fresh!=saved){
+                ensureLiveCatalogueDirectory();
+                writeAtomic(cache,fresh);
+            }
+            return;
         }
     }
     if(!policy.stopped())OwnedPlaceCatalog::applyCuration(saved,items);
 }
 
-inline bool serverCataloguesEnabled()
-{
-    static const bool enabled = fileExists("ux0:/data/RBXV00001/system/server-catalogues.enabled");
-    return enabled;
-}
-
 inline std::vector<CatalogItem> onlineCatalog(std::string& status, bool forceRefresh = false,
                                             const CatalogRequestPolicy& policy = CatalogRequestPolicy())
 {
-    const std::string root="ux0:/data/RBXV00001/system/catalog";
-    const std::string cache=root+"/pool-manifest.json";
+    const std::string root="ux0:/data/Bloxicon/system/catalog";
+    // Keep downloaded catalogues outside the immutable paths provided by the PAC.
+    const std::string live=root+"/live";
+    const std::string cache=live+"/pool-manifest.json";
     const std::string origin=CatalogDownloadPolicy::poolOrigin();
-    sceIoMkdir(root.c_str(),0777);sceIoMkdir((root+"/pool-pages").c_str(),0777);
+    recoverAtomicTarget(cache);
     std::string cached;readCatalogCache(cache,cached,128u*1024u);
-    if(cached.empty()&&!serverCataloguesEnabled())
-        readCatalogCache("app0:/catalog/pool-manifest.json",cached,128u*1024u);
     std::string lastError;
     const auto load=[&](const std::string& manifest,bool network,std::vector<CatalogItem>& result)->bool {
         std::vector<OwnedPlaceCatalog::Page> pages;size_t records=0;
@@ -2155,11 +2167,12 @@ inline std::vector<CatalogItem> onlineCatalog(std::string& status, bool forceRef
         std::vector<CatalogItem> staged;staged.reserve(records);
         for(const auto& page:pages){
             if(policy.stopped())return false;
-            const std::string pageCache=root+"/pool-pages/"+page.file;
+            const std::string pagePath="/pool-pages/"+page.file;
+            const std::string pageCache=live+pagePath;
             std::string data;readCatalogCache(pageCache,data,page.bytes);
             bool valid=OwnedPlaceCatalog::validPage(page,data),downloaded=false;
-            if(!valid&&!serverCataloguesEnabled()) {
-                data.clear();readCatalogCache("app0:/catalog/pool-pages/"+page.file,data,page.bytes);
+            if(!valid){
+                data.clear();readCatalogCache(root+pagePath,data,page.bytes);
                 valid=OwnedPlaceCatalog::validPage(page,data);
             }
             if(!valid&&network&&policy.mayFetch()) {
@@ -2174,25 +2187,40 @@ inline std::vector<CatalogItem> onlineCatalog(std::string& status, bool forceRef
             }
             // Content-addressed local/bundled pages are already verified. Only
             // a newly downloaded page needs publication, once per new content.
-            if(downloaded&&!policy.stopped())writeAtomic(pageCache,data);
+            if(downloaded&&!policy.stopped()){
+                ensureLiveCatalogueDirectory(true);
+                writeAtomic(pageCache,data);
+            }
         }
         if(staged.size()!=records||policy.stopped())return false;
         result.swap(staged);return true;
     };
     std::vector<CatalogItem> result;
-    if(!forceRefresh&&policy.cacheOnly&&!cached.empty()&&load(cached,false,result)){
+    const auto loadSaved=[&]() {
+        if(!cached.empty()&&load(cached,false,result))return true;
+        std::string bundled;
+        return readCatalogCache(root+"/pool-manifest.json",bundled,128u*1024u)&&load(bundled,false,result);
+    };
+    if(!forceRefresh&&policy.cacheOnly&&loadSaved()){
         enrichOwnedCatalogue(result,policy);status="Bloxicon archive: "+std::to_string(result.size())+" places.";return result;
     }
     if(policy.mayFetch()&&!policy.stopped()){
         std::string fresh,error;
         if(fetchExternal(origin+"/place-pool/vita/manifest.json",fresh,error)&&load(fresh,true,result)){
-            if(!policy.stopped())writeAtomic(cache,fresh);
-            enrichOwnedCatalogue(result,policy);status="Bloxicon archive: "+std::to_string(result.size())+" places.";return result;
+            if(!policy.stopped()&&fresh!=cached){
+                std::string bundled;
+                if(!cached.empty()||!readCatalogCache(root+"/pool-manifest.json",bundled,128u*1024u)||fresh!=bundled){
+                    ensureLiveCatalogueDirectory();
+                    writeAtomic(cache,fresh);
+                }
+            }
+            enrichOwnedCatalogue(result,policy);
+            result.erase(std::remove_if(result.begin(),result.end(),[](const CatalogItem& item){
+                return item.vitaStatus=="broken";
+            }),result.end());
+            status="Bloxicon archive: "+std::to_string(result.size())+" places.";return result;
         }
         if(!error.empty())lastError=error;
-    }
-    if(!cached.empty()&&load(cached,false,result)){
-        enrichOwnedCatalogue(result,policy);status="Bloxicon archive: "+std::to_string(result.size())+" saved places. Refresh unavailable.";return result;
     }
     status=policy.stopped()?"Archive loading cancelled.":"Bloxicon archive unavailable. "+lastError;
     return {};
@@ -2253,8 +2281,8 @@ inline bool installCatalogItem(const CatalogItem& item, std::string& status)
         return false;
     }
 
-    sceIoMkdir("ux0:/data/RBXV00001", 0777);
-    sceIoMkdir("ux0:/data/RBXV00001/places", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon/places", 0777);
     const std::string destination=catalogInstallPath(item);
     if(fileExists(destination)){
         const std::atomic<bool> notCancelled{false};

@@ -21,7 +21,33 @@ def index(path):
             name=f.read(length).decode();rows[name]=(path,offset,stored,size)
     return rows
 
-def merge(archives,output,loose=None,overlays=()):
+def limit_numeric_asset_cache(rows, limit, priority_assets):
+    if not 16 < limit <= MAX_PACK_BYTES:
+        raise ValueError('Invalid runtime archive budget')
+    priority = {f'assets/{asset}' for asset in priority_assets}
+    if not priority.issubset(rows):
+        raise ValueError('A priority asset is missing from the input archive')
+    selected = {}
+    optional = []
+    size = 16
+    for name, row in rows.items():
+        cost = ENTRY.size + len(name.encode()) + row[2]
+        tail = name.removeprefix('assets/')
+        if tail != name and tail.isascii() and tail.isdecimal() and name not in priority:
+            optional.append((int(tail), name, row, cost))
+        else:
+            selected[name] = row
+            size += cost
+    if size > limit:
+        raise ValueError(f'Required runtime entries need {size} bytes, over the {limit}-byte budget')
+    for _, name, row, cost in sorted(optional):
+        if size + cost <= limit:
+            selected[name] = row
+            size += cost
+    return selected
+
+
+def merge(archives,output,loose=None,overlays=(),asset_cache_limit=None,priority_assets=()):
     output=Path(output);sources=[];rows={};replaced=0
     for path in map(Path,archives):
         if path.resolve()==output.resolve():raise ValueError('Output cannot replace a source')
@@ -42,6 +68,8 @@ def merge(archives,output,loose=None,overlays=()):
                 layer=Path(temporary)/'loose.pac';build_files(additions,layer);rows.update(index(layer))
         if overlays:
             layer=Path(temporary)/'updates.pac';build_files(overlays,layer);rows.update(index(layer))
+        if asset_cache_limit is not None:
+            rows=limit_numeric_asset_cache(rows,asset_cache_limit,priority_assets)
         if not 0<len(rows)<=MAX_ENTRIES:raise ValueError('Combined entry limit exceeded')
         names=sorted(rows);size=sum(16+len(name.encode()) for name in names);offset=16+size
         if size>MAX_INDEX_BYTES or offset+sum(row[2] for row in rows.values())>MAX_PACK_BYTES:raise ValueError('Combined pack exceeds bounded size')

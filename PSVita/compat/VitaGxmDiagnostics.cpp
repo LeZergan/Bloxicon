@@ -14,7 +14,7 @@ void record(const char* operation, int result, const void* context, const void* 
 {
     char line[256];
     int n = sceClibSnprintf(line, sizeof(line), "gxm %s result=0x%08x context=%p target=%p color=%p depth=%p size=%ux%u\n", operation, static_cast<unsigned>(result), context, target, color, depth, width, height);
-    SceUID file = sceIoOpen("ux0:/data/RBXV00001/system/logs/gxm-resource.log", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
+    SceUID file = sceIoOpen("ux0:/data/Bloxicon/system/logs/gxm-resource.log", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
     if (file >= 0) {
         if (n > 0) sceIoWrite(file, line, n < static_cast<int>(sizeof(line)) ? n : sizeof(line) - 1);
         sceIoClose(file);

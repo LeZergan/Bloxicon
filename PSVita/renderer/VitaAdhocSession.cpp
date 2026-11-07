@@ -205,6 +205,7 @@ bool decodeLanControl(const void* data, size_t size, LanControl& value)
 #include <psp2/kernel/threadmgr.h>
 #include "network/VitaTcpTunnel.h"
 #include "network/VitaOnlineTiming.h"
+#include "VitaOfficialEndpoint.h"
 #include <psp2/io/dirent.h>
 #include <fstream>
 #include <fcntl.h>
@@ -722,6 +723,15 @@ bool Session::startLan(const Advertisement& value, bool hosting, std::string& er
             publicProfiles[address.s_addr]=endpoint.text();
             nextPublicProbe=0;
         };
+        SceNetInAddr bootstrap{};
+        const bool official=accountPort==31901&&VitaOfficialEndpoint::matches(accountHost.c_str());
+        if(official){
+            std::memcpy(&bootstrap.s_addr,VitaOfficialEndpoint::ipv4.data(),4);
+            configurePublicHost(0,bootstrap);
+        }
+        bool waitingForBootstrap=official&&configured[0];
+        const uint64_t bootstrapDeadline=sceKernelGetSystemTimeWide()+
+            RBX::Network::VitaOnlineTiming::standardPortProbeUs+RBX::Network::VitaOnlineTiming::webSocketProbeUs;
         LanControl availability;
         availability.serverPort = kRobloxServerPort;
         std::map<unsigned int,ServerSnapshotState<Advertisement>> snapshots;
@@ -731,6 +741,13 @@ bool Session::startLan(const Advertisement& value, bool hosting, std::string& er
         {
             const uint64_t now = sceKernelGetSystemTimeWide();
             if(!hosting) {
+                if(waitingForBootstrap&&now>=bootstrapDeadline&&
+                   !RBX::Network::vitaTcpTunnelEnabled(bootstrap.s_addr)) {
+                    // Keep probing the published address while allowing the
+                    // system resolver to discover a migrated official route.
+                    configured[0]=false;
+                    waitingForBootstrap=false;
+                }
                 // DNS may take seconds or stall on a disconnected network. Only
                 // one lookup runs at a time; the receive/probe loop never waits
                 // for it, and stop() can still abort the registered resolver.
@@ -776,7 +793,7 @@ bool Session::startLan(const Advertisement& value, bool hosting, std::string& er
                                 impl->publicResolver=resolver;
                             }
                             // Sony uses microseconds; 1 is rejected on hardware.
-                            result.status=sceNetResolverStartNtoa(resolver,host.c_str(),&result.address,2000000,1,0);
+                            result.status=sceNetResolverStartNtoa(resolver,host.c_str(),&result.address,3000000,2,0);
                             {
                                 std::lock_guard<std::mutex> lock(impl->resolverMutex);
                                 impl->publicResolver=-1;sceNetResolverDestroy(resolver);
@@ -953,7 +970,7 @@ bool Session::startSharing(const std::string& path,uint64_t hash,std::string& er
         // Only the selected place and flat cached assets are readable remotely.
         // The client never supplies a filesystem path.
         std::vector<std::string> files={path,std::string()};std::ostringstream listing;
-        const std::string root="ux0:/data/RBXV00001/assets/";
+        const std::string root="ux0:/data/Bloxicon/assets/";
         for(const auto& name:assets) {
             if(!impl->sharing || files.size()>=514) break;
             if(!Transfer::safeAssetName(name)) continue;

@@ -1,0 +1,11 @@
+Bloxicon Vita client
+Copyright (C) 2026 Bloxicon contributors
+
+Bloxicon-authored client code, source modifications, build scripts and
+documentation in this repository are licensed under the GNU General Public
+License, version 3 only (SPDX-License-Identifier: GPL-3.0-only).
+See LICENSE for the complete license and warranty disclaimer.
+
+Third-party components retain their original copyright notices and licenses.
+See THIRD_PARTY_NOTICES.md. This license does not grant rights to separately
+obtained engine baselines, original places, runtime data or game assets.

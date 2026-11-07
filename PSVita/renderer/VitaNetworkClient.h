@@ -13,9 +13,10 @@ class NetworkClientObserver
 public:
     NetworkJoinState state;
 
-    static std::shared_ptr<NetworkClientObserver> attach(RBX::Network::Client& client, uint64_t now)
+    static std::shared_ptr<NetworkClientObserver> attach(RBX::Network::Client& client, uint64_t now,
+                                                        uint64_t connectBudget = 20000000ULL)
     {
-        std::shared_ptr<NetworkClientObserver> observer(new NetworkClientObserver(now));
+        std::shared_ptr<NetworkClientObserver> observer(new NetworkClientObserver(now,connectBudget));
         const std::weak_ptr<NetworkClientObserver> weak = observer;
         observer->acceptedConnection = client.connectionAcceptedSignal.connect(
             [weak](std::string, boost::shared_ptr<RBX::Instance> instance) {
@@ -57,7 +58,7 @@ public:
     }
 
 private:
-    explicit NetworkClientObserver(uint64_t now) : state(now) {}
+    NetworkClientObserver(uint64_t now,uint64_t connectBudget) : state(now,connectBudget) {}
     // All callbacks capture a weak owner, never main's stack or a raw session.
     // Destruction disconnects them; an in-flight callback holds a strong owner
     // until it completes. No new replication protocol or spawn policy is added.

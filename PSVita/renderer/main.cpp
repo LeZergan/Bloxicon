@@ -61,6 +61,7 @@
 #include "network/Player.h"
 #include "network/api.h"
 #include "network/VitaSocketPolicy.h"
+#include "network/VitaOnlineTiming.h"
 #include "Client.h"
 #include "Server.h"
 #include "humanoid/Humanoid.h"
@@ -68,6 +69,7 @@
 #include "v8datamodel/TouchInputService.h"
 #include "v8datamodel/GamepadService.h"
 #include "v8datamodel/Hopper.h"
+#include "v8datamodel/BadgeService.h"
 #include "v8datamodel/PlayerGui.h"
 #include "v8datamodel/PlayerScripts.h"
 #include "v8datamodel/ScreenGui.h"
@@ -103,6 +105,7 @@
 #include "LoaderUI.h"
 #include "OriginalPlaceIntegrity.h"
 #include "VitaBootSplash.h"
+#include "debugScreen.h"
 #include "LoaderGameOverlay.h"
 #include "LoaderServers.h"
 #include "AvatarNativeEditor.h"
@@ -324,7 +327,7 @@ public:
         pad.lx = pad.ly = pad.rx = pad.ry = 128;
         // Opt-in, bounded acquisition evidence for native input investigations.
         // Never write from the 125 Hz sampler or enable this for normal play.
-        if (FILE* marker = std::fopen("ux0:/data/RBXV00001/system/loader-input-trace.enabled", "rb"))
+        if (FILE* marker = std::fopen("ux0:/data/Bloxicon/system/loader-input-trace.enabled", "rb"))
         {
             inputTrace = true;
             std::fclose(marker);
@@ -418,8 +421,9 @@ public:
 
 void stage(const char* message)
 {
+    if(!VitaLoaderDiagnostics::detailed().load(std::memory_order_relaxed))return;
     static const auto start = sceKernelGetSystemTimeWide();
-    FILE* f = std::fopen("ux0:/data/RBXV00001/system/logs/scene.log", "a");
+    FILE* f = std::fopen("ux0:/data/Bloxicon/system/logs/scene.log", "a");
     if (f) { std::fprintf(f, "%.3fs %s\n", (sceKernelGetSystemTimeWide() - start) * .000001, message); std::fclose(f); }
 }
 
@@ -468,7 +472,8 @@ void returnToBrowserAttempt(const char* stageMessage,const char* loaderMessage,b
             RBX::vitaRuntimeMemoryFailureReason().load(),
             unsigned(RBX::vitaRuntimeMemoryFailureBytes().load()),
             unsigned(memory.uordblks), unsigned(memory.fordblks), unsigned(memory.arena));
-        SceUID diagnostic = sceIoOpen("ux0:/data/RBXV00001/system/runtime-memory.txt",
+        VitaLoaderDiagnostics::ensureDirectory();
+        SceUID diagnostic = sceIoOpen("ux0:/data/Bloxicon/system/logs/runtime-memory.txt",
             SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
         if (diagnostic >= 0) {
             if (length > 0 && length < int(sizeof(evidence))) sceIoWrite(diagnostic, evidence, length);
@@ -477,8 +482,8 @@ void returnToBrowserAttempt(const char* stageMessage,const char* loaderMessage,b
         // Heap exhaustion cannot safely draw UI, build strings, or invoke
         // OnClose scripts. Native I/O persists a fixed loader banner, then
         // LoadExec releases all process arenas together.
-        const char* temp = "ux0:/data/RBXV00001/system/loader-message.txt.tmp";
-        const char* final = "ux0:/data/RBXV00001/system/loader-message.txt";
+        const char* temp = "ux0:/data/Bloxicon/system/loader-message.txt.tmp";
+        const char* final = "ux0:/data/Bloxicon/system/loader-message.txt";
         const char banner[] = "error:Game setup or runtime ran out of memory. Bloxicon restarted to free memory. Select another game.\n";
         SceUID file = sceIoOpen(temp, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
         if (file >= 0) {
@@ -487,7 +492,7 @@ void returnToBrowserAttempt(const char* stageMessage,const char* loaderMessage,b
             if (written == sizeof(banner)-1) {
                 // The ordinary publisher builds std::strings. This recovery
                 // path must publish without allocating or losing an old file.
-                const char* backup = "ux0:/data/RBXV00001/system/loader-message.txt.previous";
+                const char* backup = "ux0:/data/Bloxicon/system/loader-message.txt.previous";
                 SceIoStat stat = {};
                 const bool hadExisting = sceIoGetstat(final, &stat) >= 0;
                 if (!hadExisting || (sceIoRemove(backup), sceIoRename(final, backup) >= 0)) {
@@ -557,7 +562,7 @@ void returnToBrowserAttempt(const char* stageMessage,const char* loaderMessage,b
             // Do not terminate a process whose durable-save completion is unknown.
             stage("place exit preparation failed; process retained");
             for(;;) {
-                VitaBrowser::drawLoaderStatusScreen("MY GAMES","Could not finish returning","Your session is retained. Check system/logs/scene.log before closing Bloxicon.");
+                VitaBrowser::drawLoaderStatusScreen("MY GAMES","Could not finish returning","Your session is still open. The game could not finish saving.");
                 vglSwapBuffers(GL_FALSE);sceKernelDelayThread(100000);
             }
         }
@@ -616,11 +621,11 @@ void returnToBrowserAttempt(const char* stageMessage,const char* loaderMessage,b
         throw returned;
     }
 
-    sceIoMkdir("ux0:/data/RBXV00001", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon", 0777);
     if (loaderMessage && *loaderMessage)
     {
-        const char* finalPath = "ux0:/data/RBXV00001/system/loader-message.txt";
-        const char* tempPath = "ux0:/data/RBXV00001/system/loader-message.txt.tmp";
+        const char* finalPath = "ux0:/data/Bloxicon/system/loader-message.txt";
+        const char* tempPath = "ux0:/data/Bloxicon/system/loader-message.txt.tmp";
         std::ofstream output(tempPath, std::ios::trunc);
         if (output)
         {
@@ -684,7 +689,7 @@ void applyRuntimeSettings(const VitaBrowser::RuntimeSettings& runtimeSettings)
 bool applyCpu3Setting(const VitaBrowser::RuntimeSettings& runtimeSettings)
 {
 	RBX::vitaSlowJobLogging().store(runtimeSettings.performanceLogging ||
-        std::ifstream("ux0:/data/RBXV00001/system/frame-budget.enabled").good(),std::memory_order_release);
+        std::ifstream("ux0:/data/Bloxicon/system/frame-budget.enabled").good(),std::memory_order_release);
 	RBX::vitaAudioCpu3Enabled().store(false, std::memory_order_release);
 	const SceUID thread = sceKernelGetThreadId();
 	RBX::Graphics::TextureManager::setVitaCpu3TextureWorkerEnabled(false);
@@ -932,10 +937,10 @@ bool installServerPlace(VitaInputSampler& sampler,const VitaBrowser::RuntimeSett
         placePath = installed;
         return true;
     }
-    sceIoMkdir("ux0:/data/RBXV00001",0777);sceIoMkdir("ux0:/data/RBXV00001/places",0777);
-    sceIoMkdir("ux0:/data/RBXV00001/assets",0777);
+    sceIoMkdir("ux0:/data/Bloxicon",0777);sceIoMkdir("ux0:/data/Bloxicon/places",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/assets",0777);
     char name[64];std::snprintf(name,sizeof(name),"%016llx",static_cast<unsigned long long>(host.advertisement.placeHash));
-    const std::string folder=std::string("ux0:/data/RBXV00001/places/")+name;
+    const std::string folder=std::string("ux0:/data/Bloxicon/places/")+name;
     sceIoMkdir(folder.c_str(),0777);
     std::string filename=VitaBrowser::safeFileName(host.advertisement.placeName);
     if(!VitaBrowser::supported(filename))filename+=".rbxl";
@@ -1499,7 +1504,7 @@ void showActiveServers(VitaInputSampler& sampler, const VitaBrowser::RuntimeSett
         else if(hosts.empty()) {
             VitaBrowser::drawPageIcon(VitaBrowser::PagePlay,true,624,136,40);
             VitaBrowser::uiText(624,198,"Find your next session",VitaBrowser::kUiText,19,286,true);
-            VitaBrowser::uiText(624,234,hasServiceQuota?"Host is online and ready.":"Choose a game to see its servers.",VitaBrowser::kUiMuted,15,286);
+            VitaBrowser::uiText(624,234,hasServiceQuota?"Host is online and ready.":"Pick a game to see servers.",VitaBrowser::kUiMuted,15,286);
             if(hasServiceQuota) {
                 const auto& quota=service.advertisement;
                 VitaBrowser::uiText(624,268,"Games  "+std::to_string(quota.serversUsed)+" / "+std::to_string(quota.serversLimit),VitaBrowser::kUiText,15,286);
@@ -1537,10 +1542,10 @@ void showActiveServers(VitaInputSampler& sampler, const VitaBrowser::RuntimeSett
 
 void auditLoadedPlace(RBX::DataModel* dm, const char* phase)
 {
-    static const bool enabled = VitaBrowser::fileExists("ux0:/data/RBXV00001/system/load-audit.enabled");
+    static const bool enabled = VitaBrowser::fileExists("ux0:/data/Bloxicon/system/load-audit.enabled");
     if (!enabled) return;
     const RBX::RunService* run = RBX::ServiceProvider::find<RBX::RunService>(dm);
-    VitaLoadAudit::snapshot("ux0:/data/RBXV00001/system/load-audit", phase,
+    VitaLoadAudit::snapshot("ux0:/data/Bloxicon/system/load-audit", phase,
         run ? int(run->getRunState()) : -1, run ? run->gameTime() : 0.0,
         [&](std::ostream& output) { RBX::SerializerBinary::serialize(output, dm); },
         [](const std::string& target, const std::string& temporary) {
@@ -1579,12 +1584,12 @@ void prepareEmbeddedPlaceContent(RBX::DataModel* dm)
             }
             total+=bytes;
         }
-    sceIoMkdir("ux0:/data/RBXV00001/assets",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/assets",0777);
     unsigned installed=0,existing=0,rejected=0;
     for(const auto& child:*children)
         if(auto blob=RBX::Instance::fastDynamicCast<RBX::BinaryStringValue>(child.get())) {
             const auto result=RBX::VitaEmbeddedAssetBundle::install<VitaCacheSha256>(
-                "ux0:/data/RBXV00001/assets",child->getName(),blob->getValue().value());
+                "ux0:/data/Bloxicon/assets",child->getName(),blob->getValue().value());
             if(result==RBX::VitaEmbeddedAssetBundle::Installed)++installed;
             else if(result==RBX::VitaEmbeddedAssetBundle::AlreadyPresent)++existing;
             else ++rejected;
@@ -1621,9 +1626,8 @@ void recordPlaceLoadReport(const RBX::LoadDiagnostics::Report& report,
         report.write(output, fromCache);
         output << "input=" << (fromCache ? "cache" : "source") << '\n'
                << "cache_source_key=" << sourceKey << '\n';
-        if (!currentPlaceDataRoot.empty())
-            VitaBrowser::writeAtomic(currentPlaceDataRoot + "/load-report.txt", output.str());
-        if (!VitaBrowser::writeAtomic("ux0:/data/RBXV00001/system/last-load-report.txt", output.str()))
+        if (!currentPlaceDataRoot.empty() &&
+            !VitaBrowser::writeAtomic(currentPlaceDataRoot + "/load-report.txt", output.str()))
             stage("load report could not be saved");
     }
     catch (...)
@@ -1700,7 +1704,7 @@ boost::shared_ptr<RBX::DataModel> loadPlace(const char* path,
     VitaPlaceCache::LoadResult cacheResult;
     if (!nativeBinary)
     {
-        sceIoMkdir("ux0:/data/RBXV00001/system/place-cache", 0777);
+        sceIoMkdir("ux0:/data/Bloxicon/system/place-cache", 0777);
         VitaBrowser::recoverAtomicTarget(cachePath);
         VitaBrowser::recoverAtomicTarget(cacheMetaPath);
         cacheResult = VitaPlaceCache::loadStream<VitaCacheSha256>(
@@ -1711,8 +1715,8 @@ boost::shared_ptr<RBX::DataModel> loadPlace(const char* path,
     // envelope and SHA-256 checks as a per-game cache.
     if (!nativeBinary && cacheResult.state == VitaPlaceCache::LoadState::Miss)
     {
-        const char* oldData = "ux0:/data/RBXV00001_place_cache.rbxl";
-        const char* oldMeta = "ux0:/data/RBXV00001_place_cache.meta";
+        const char* oldData = "ux0:/data/Bloxicon_place_cache.rbxl";
+        const char* oldMeta = "ux0:/data/Bloxicon_place_cache.meta";
         VitaBrowser::recoverAtomicTarget(oldData);
         VitaBrowser::recoverAtomicTarget(oldMeta);
         cacheResult = VitaPlaceCache::loadStream<VitaCacheSha256>(
@@ -1782,7 +1786,7 @@ boost::shared_ptr<RBX::DataModel> loadPlace(const char* path,
     if (!SHA256(reinterpret_cast<const unsigned char*>(saveIdentity.data()), saveIdentity.size(), saveDigest))
         throw std::runtime_error("Could not create local save namespace");
     static const char hexDigits[] = "0123456789abcdef";
-    std::string saveRoot("ux0:/data/RBXV00001/system/local-saves/v1/");
+    std::string saveRoot("ux0:/data/Bloxicon/system/local-saves/v1/");
     for (size_t i = 0; i < sizeof(saveDigest); ++i)
     {
         saveRoot += hexDigits[saveDigest[i] >> 4];
@@ -1899,7 +1903,7 @@ boost::shared_ptr<RBX::DataModel> loadPlace(const char* path,
             stage("only non-world metadata omitted; preserving partial report and caching playable place");
         reportLoadingProgress(progress, "place binary cache write begin", "Saving optimized place cache...");
         std::lock_guard<std::mutex> cacheLock(RBX::VitaCacheBudget::mutex());
-        const bool admitted = RBX::VitaCacheBudget::trim("ux0:/data/RBXV00001/system/place-cache",
+        const bool admitted = RBX::VitaCacheBudget::trim("ux0:/data/Bloxicon/system/place-cache",
             RBX::VitaCacheBudget::Places, 256u * 1024u * 1024u, cachePath, VitaPlaceCache::maxCacheBytes + 1024);
         const bool cached = admitted && VitaPlaceCache::publish<VitaCacheSha256>(cacheKey, cachePath, cacheMetaPath,
             [&](std::ostream& output) { RBX::SerializerBinary::serialize(output, dm.get()); },
@@ -2022,6 +2026,29 @@ void applyConfiguredAvatarBodyColors(RBX::Instance* character, const VitaBrowser
 
 static VitaBootSplash bootSplash;
 
+static int showRuntimePackSetup()
+{
+    if (psvDebugScreenInit() < 0) return 1;
+    if (auto* font = psvDebugScreenScaleFont2x(psvDebugScreenGetFont()))
+        psvDebugScreenSetFont(font);
+    psvDebugScreenPuts("\n\n\n   Bloxicon needs its runtime pack\n\n"
+        "   Copy the kit's data folder into ux0:/.\n"
+        "   Check for ux0:/data/Bloxicon/runtime.pac.\n"
+        "   Replace it from the ZIP if it is damaged.\n\n"
+        "   Press Circle to close, then reopen Bloxicon.");
+    bool released = false;
+    for (;;)
+    {
+        SceCtrlData pad = {};
+        if (sceCtrlPeekBufferPositive(0, &pad, 1) > 0)
+        {
+            if (!(pad.buttons & SCE_CTRL_CIRCLE)) released = true;
+            else if (released) return 0;
+        }
+        sceKernelDelayThread(16000);
+    }
+}
+
 extern "C" void vita_loader_first_frame(void)
 {
     for(unsigned frame=0;frame<3;++frame) {
@@ -2042,27 +2069,29 @@ int main()
     // Pool exhaustion must follow the same bad_alloc recovery path as other
     // allocations. The desktop default deliberately aborts the whole process.
     RBX::roblox_allocator::crashOnAllocationFailure = false;
+    const char* runtimePack="ux0:/data/Bloxicon/runtime.pac";
+    const bool packedRuntime=mountVitaRuntimePack(runtimePack);
+    if (!packedRuntime) return showRuntimePackSetup();
+    bootSplash.start();
+    sceIoMkdir("ux0:/data/Bloxicon/places",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system",0777);
+    VitaLoaderDiagnostics::tidyLegacy();
     VitaBrowser::RuntimeSettings runtimeSettings = VitaBrowser::loadSettings();
     VitaBrowser::Design::theme(runtimeSettings.darkMode,runtimeSettings.acceptCircle,runtimeSettings.bloxiconMode);
-    bootSplash.start();
-    // Create the complete writable hierarchy before settings and diagnostics.
-    sceIoMkdir("ux0:/data/RBXV00001",0777);
-    for(const char* folder : {"places","assets","system","system/logs","system/avatar",
-        "system/cache","system/image-cache","system/thumbnails","system/programs",
-        "system/place-cache","system/local-saves"}) {
-        const std::string path=std::string("ux0:/data/RBXV00001/")+folder;
-        sceIoMkdir(path.c_str(),0777);
-    }
+    VitaLoaderDiagnostics::configure(runtimeSettings.performanceLogging);
     stage("boot scene-v66 level browser and gameplay compatibility");
     try{VitaAccount::recoverGuest();}catch(const std::exception& e){std::fprintf(stderr,"Account avatar recovery: %s\n",e.what());}
     // Returning to the loader launches a fresh process. Retain the last game's
     // errors before the new loader truncates its own stderr file.
-    std::remove("ux0:/data/RBXV00001/system/logs/stderr.previous.log");
-    std::rename("ux0:/data/RBXV00001/system/logs/stderr.log",
-        "ux0:/data/RBXV00001/system/logs/stderr.previous.log");
-    std::freopen("ux0:/data/RBXV00001/system/logs/stderr.log", "w", stderr);
-    static char stderrBuffer[64 * 1024];
-    std::setvbuf(stderr, stderrBuffer, _IOLBF, sizeof(stderrBuffer));
+    if(VitaLoaderDiagnostics::detailed().load(std::memory_order_relaxed)){
+        std::remove("ux0:/data/Bloxicon/system/logs/stderr.previous.log");
+        std::rename("ux0:/data/Bloxicon/system/logs/stderr.log",
+            "ux0:/data/Bloxicon/system/logs/stderr.previous.log");
+        if(std::freopen("ux0:/data/Bloxicon/system/logs/stderr.log", "w", stderr)){
+            static char stderrBuffer[64 * 1024];
+            std::setvbuf(stderr, stderrBuffer, _IOLBF, sizeof(stderrBuffer));
+        }
+    }
     const int netInitResult = _vita_net_init();
     if (netInitResult < 0)
     {
@@ -2130,35 +2159,16 @@ int main()
         applyRuntimeSettings(runtimeSettings);
         RBX::DebugSettings::singleton(); RBX::PhysicsSettings::singleton();
         stage("content setup");
-        // A clean installation needs one immutable base file. Old layouts keep
-        // working, including when an incomplete/corrupt base pack is rejected.
-        const bool packedBase=mountVitaRuntimePack("ux0:/data/RBXV00001/base.pac");
-        VitaBrowser::packResults().push_back({"ux0:/data/RBXV00001/base.pac",packedBase});
-        if(!packedBase) {
-        const bool packedRuntime=mountVitaRuntimePack("ux0:/data/RBXV00001/system/runtime.pac");
-        VitaBrowser::packResults().push_back({"ux0:/data/RBXV00001/system/runtime.pac",packedRuntime});
-        stage(packedRuntime ? "runtime pack mounted" : "runtime pack absent; legacy folders");
-        const bool packedCommunity=appendVitaRuntimePack("ux0:/data/RBXV00001/system/community.pac");
-        VitaBrowser::packResults().push_back({"ux0:/data/RBXV00001/system/community.pac",packedCommunity});
-        stage(packedCommunity ? "community pack mounted" : "community pack absent; legacy files");
-        const bool packedController=appendVitaRuntimePack("ux0:/data/RBXV00001/system/controller.pac");
-        VitaBrowser::packResults().push_back({"ux0:/data/RBXV00001/system/controller.pac",packedController});
-        stage(packedController ? "controller pack mounted" : "controller pack absent; runtime glyphs");
-        } else stage("complete base data pack mounted");
-        // Shared add-ons update either preserved data layout. A complete base
-        // must not hide catalogue/UI updates or recovered original assets.
-        for(const auto path:{"ux0:/data/RBXV00001/system/loader.pac","ux0:/data/RBXV00001/system/cosmetics.pac",
-                             "ux0:/data/RBXV00001/system/original-assets-v1.pac"}) {
-            const bool loaded=appendVitaRuntimePack(path);
-            VitaBrowser::packResults().push_back({path,loaded});stage(loaded?"loader add-on pack mounted":"loader add-on pack absent");
+        VitaBrowser::packResults().push_back({runtimePack,packedRuntime});
+        for(const char* group:{"essential","additions"}) {
+            if(vita_runtime_pack_has_file(VitaAvatar::offlineCataloguePath(group).c_str()))continue;
+            for(const auto& path:VitaAvatar::installedAvatarPacks(group)) {
+                if(appendVitaUserPack(path.c_str()))continue;
+                std::fprintf(stderr,"Vita wardrobe pack mount failed: %s\n",group);
+                break;
+            }
         }
-        const bool packedCoreUi=appendVitaRuntimePack("ux0:/data/RBXV00001/system/core-ui-20261101-r1.pac");
-        VitaBrowser::packResults().push_back({"ux0:/data/RBXV00001/system/core-ui-20261101-r1.pac",packedCoreUi});
-        stage(packedCoreUi ? "core interface update mounted" : "core interface update absent; runtime scripts");
-        for(const auto& path:VitaBrowser::userPacks()) {
-            const bool loaded=appendVitaUserPack(path.c_str());
-            VitaBrowser::packResults().push_back({path,loaded});stage(loaded?"user pack mounted":"user pack rejected");
-        }
+        stage("Bloxicon runtime pack mounted");
         // Keep large, updateable runtime data outside the VPK. A complete data
         // root mirrors content/, shaders/ and PlatformContent/pc so the original
         // relative asset paths still resolve unchanged. Existing full installs
@@ -2167,11 +2177,11 @@ int main()
         struct stat vitaDataShaders = {};
         struct stat vitaDataPlatform = {};
         const bool externalRuntimeData =
-            stat("ux0:/data/RBXV00001/content", &vitaDataContent) == 0 && S_ISDIR(vitaDataContent.st_mode) &&
-            stat("ux0:/data/RBXV00001/shaders", &vitaDataShaders) == 0 && S_ISDIR(vitaDataShaders.st_mode) &&
-            stat("ux0:/data/RBXV00001/PlatformContent/pc", &vitaDataPlatform) == 0 && S_ISDIR(vitaDataPlatform.st_mode);
+            stat("ux0:/data/Bloxicon/content", &vitaDataContent) == 0 && S_ISDIR(vitaDataContent.st_mode) &&
+            stat("ux0:/data/Bloxicon/shaders", &vitaDataShaders) == 0 && S_ISDIR(vitaDataShaders.st_mode) &&
+            stat("ux0:/data/Bloxicon/PlatformContent/pc", &vitaDataPlatform) == 0 && S_ISDIR(vitaDataPlatform.st_mode);
         RBX::ContentProvider::setAssetFolder(externalRuntimeData ?
-            "ux0:/data/RBXV00001/content/" : "app0:/content/");
+            "ux0:/data/Bloxicon/content/" : "app0:/content/");
         stage(externalRuntimeData ? "runtime data root ux0" : "runtime data root app0 fallback");
         // Keep local material and sky textures within the graphics memory that
         // remains after framebuffers and scene geometry. TextureManager uses
@@ -2406,7 +2416,9 @@ int main()
         const std::string gamePlayerName=accountPlayer?gameAccount.username:runtimeSettings.username;
         if(accountPlayer)localPlayerUserId=gameAccount.userId;
         std::atomic<bool> returnToLoaderRequested(false);
-        RBX::VitaBadges::setPlace(placeFileDisplayName(placePath), dm->getPlaceID());
+        RBX::VitaBadges::setPlace(placeFileDisplayName(placePath), dm->getPlaceID(), gamePlayerName,
+            accountPlayer ? RBX::VitaBadges::accountProfile(gameAccount.account) : std::string());
+        rbx::signals::scoped_connection networkBadges;
         auto setupScriptFailed = std::make_shared<std::atomic<bool>>(false);
         rbx::signals::scoped_connection loadingErrorConnection =
             RBX::ServiceProvider::create<RBX::ScriptContext>(dm.get())->errorSignal.connect(
@@ -2460,13 +2472,21 @@ int main()
                 // Subscribe before Connect can deliver a synchronous failure.
                 // Initial instance readiness belongs to ClientReplicator, not
                 // the standalone loader's late-asset timeout.
-                networkJoin = VitaAdhoc::NetworkClientObserver::attach(*client, sceKernelGetSystemTimeWide());
+                networkJoin = VitaAdhoc::NetworkClientObserver::attach(*client, sceKernelGetSystemTimeWide(),
+                    RBX::Network::VitaOnlineTiming::publicPrejoinUs);
                 boost::shared_ptr<RBX::Instance> local = client->playerConnectForVita(
                     localPlayerUserId, gamePlayerName, remoteHostAddress,
                     remoteHost.serverPort, 0, -1);
                 player = RBX::Instance::fastDynamicCast<RBX::Network::Player>(local.get());
                 if (!player)
                     throw std::runtime_error("Network client did not create a local player");
+                networkBadges = RBX::ServiceProvider::create<RBX::BadgeService>(dm.get())->badgeAwardedSignal.connect(
+                    [localPlayerUserId,gamePlayerName](std::string,int userId,int badgeId) {
+                        if(userId!=localPlayerUserId || badgeId<=0)return;
+                        sceIoMkdir("ux0:/data/Bloxicon/system/badges",0777);
+                        bool added=false;
+                        RBX::VitaBadges::award(gamePlayerName,badgeId,added);
+                    });
                 stage("Bloxicon NetworkClient connect started");
             }
             setLoadingUiMessage(dm.get(), "Starting game interface and controls...");
@@ -2543,11 +2563,12 @@ int main()
         uint64_t nextLoadingDetailAt = 0;
         bool networkCancelWasDown = true;
         bool loadingGuiDismissed = false;
+        bool recordedRecentGame = false;
 	        unsigned frame = 0;
         // Test-only marker measures every frame and samples slow-frame phases
         // at most once per second, without allocator, GPU or script tracing.
         const bool frameBudgetLogging = runtimeSettings.performanceLogging ||
-            std::ifstream("ux0:/data/RBXV00001/system/frame-budget.enabled").good();
+            std::ifstream("ux0:/data/Bloxicon/system/frame-budget.enabled").good();
         RBX::vitaSlowJobLogging().store(frameBudgetLogging, std::memory_order_release);
         unsigned perfFrames = 0;
         unsigned slowFrames = 0;
@@ -3118,7 +3139,7 @@ int main()
                         VitaBrowser::uiTextEllipsized(672,104+float(i)*28,entry->getName(),VitaBrowser::Design::ink,18,168,true);
                         VitaBrowser::uiText(844,106+float(i)*28,label=="PS Vita"?"Vita":label=="Windows PC"?"Windows":"Unknown",VitaBrowser::Design::muted,16,92);
                     }
-                    VitaBrowser::uiText(672,100+float(count)*28,"Client labels are self-reported",VitaBrowser::Design::muted,16,264);
+                    VitaBrowser::uiText(672,100+float(count)*28,"Players report their client.",VitaBrowser::Design::muted,16,264);
                 }
             }
             if(gameLoadComplete && !originalMenuOpen && runtimeSettings.showFps && previousRenderMs>=0){
@@ -3432,6 +3453,11 @@ int main()
                     }
                     activeFramePhase = "loading-state lock release";
                 }
+            }
+            if (loadingGuiDismissed && !recordedRecentGame)
+            {
+                VitaBrowser::noteRecent(placePath, placeFileDisplayName(placePath));
+                recordedRecentGame = true;
             }
             visual.getAdorn()->finishRenderPass();
             if (runServiceStarted && !scriptWatchdogArmed)

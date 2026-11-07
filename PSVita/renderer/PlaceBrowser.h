@@ -20,6 +20,7 @@
 #include FT_FREETYPE_H
 #include "LoaderCatalog.h"
 #include "LoaderPreferences.h"
+#include "VitaLoaderDiagnostics.h"
 #include "util/VitaPlaceFixes.h"
 
 namespace VitaBrowser {
@@ -52,12 +53,9 @@ struct RuntimeSettings : UserPreferences
         avatarLeftLegColor(37), avatarRightLegColor(37) {}
 };
 
-inline RuntimeSettings loadSettings()
+inline bool readLoaderSettings(std::istream& input,RuntimeSettings& settings)
 {
-    RuntimeSettings settings;
     bool haveButtonVolume=false;
-    recoverAtomicTarget("ux0:/data/RBXV00001/system/settings.cfg");
-    std::ifstream input("ux0:/data/RBXV00001/system/settings.cfg");
     std::string line;
     while (std::getline(input, line))
     {
@@ -121,20 +119,26 @@ inline RuntimeSettings loadSettings()
         else if(key=="button_volume") haveButtonVolume=preferenceValue(settings,key,value)||haveButtonVolume;
         else preferenceValue(settings, key, value);
     }
-    // Preserve the former half-game-volume feedback gain for old configs,
-    // including an existing mute. New saves carry independent global controls.
-    if(!haveButtonVolume)settings.buttonVolume=settings.gameVolume/2;
+    return haveButtonVolume;
+}
+
+inline RuntimeSettings loadSettings()
+{
+    RuntimeSettings settings;
+    std::ifstream defaults("ux0:/data/Bloxicon/content/bloxicon-defaults/settings.cfg");
+    readLoaderSettings(defaults,settings);
+    const auto saved=loaderData().get(LoaderRecord::Settings);
+    if(!saved.empty()){
+        std::istringstream input(saved);
+        // Older settings inherited half of the saved game volume.
+        if(!readLoaderSettings(input,settings))settings.buttonVolume=settings.gameVolume/2;
+    }
     return settings;
 }
 
 inline bool saveSettings(const RuntimeSettings& settings)
 {
-    sceIoMkdir("ux0:/data/RBXV00001", 0777);
-    const char* tempPath = "ux0:/data/RBXV00001/system/settings.cfg.tmp";
-    const char* finalPath = "ux0:/data/RBXV00001/system/settings.cfg";
-    std::ofstream output(tempPath, std::ios::trunc);
-    if (!output)
-        return false;
+    std::ostringstream output;
     output << "auto_asset_repair=" << (settings.autoAssetRepair ? 1 : 0) << '\n'
         << "place_fixes=" << settings.placeFixes << '\n'
         << "performance_logging=" << (settings.performanceLogging ? 1 : 0) << '\n'
@@ -154,19 +158,14 @@ inline bool saveSettings(const RuntimeSettings& settings)
         << "avatar_left_leg_color=" << settings.avatarLeftLegColor << '\n'
         << "avatar_right_leg_color=" << settings.avatarRightLegColor << '\n';
     writePreferences(output, settings);
-    output.close();
-    if (!output)
-    {
-        sceIoRemove(tempPath);
-        return false;
-    }
-    if (!commitAtomicTemp(finalPath, tempPath)){sceIoRemove(tempPath);return false;}
+    if(!output||!loaderData().set(LoaderRecord::Settings,output.str()))return false;
+    VitaLoaderDiagnostics::configure(settings.performanceLogging);
     return true;
 }
 
 
 inline std::string placeSettingsPath(const std::string& place) {
-    return "ux0:/data/RBXV00001/system/place-settings/"+placeSettingsKey(place)+".cfg";
+    return "ux0:/data/Bloxicon/system/place-settings/"+placeSettingsKey(place)+".cfg";
 }
 inline bool placePreferenceKey(const std::string& key) {
     return key!="dark_mode" && key!="bloxicon_mode" && key!="show_chat_button" && key!="accept_circle" && key!="menu_music" && key!="music_volume" && key!="music_loop";
@@ -189,7 +188,7 @@ inline RuntimeSettings settingsForPlace(const RuntimeSettings& global,const std:
 }
 inline bool savePlaceSettings(const RuntimeSettings& settings,const std::string& place) {
     if(place.empty() || place.find_first_of("\r\n")!=std::string::npos)return false;
-    sceIoMkdir("ux0:/data/RBXV00001/system/place-settings",0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system/place-settings",0777);
     const auto path=placeSettingsPath(place),temp=path+".tmp";
     std::ofstream output(temp,std::ios::trunc);
     output<<"place="<<place<<'\n'<<"graphics_quality="<<settings.graphicsQuality<<'\n'
@@ -201,7 +200,7 @@ inline bool savePlaceSettings(const RuntimeSettings& settings,const std::string&
 
 inline std::string takeLoaderMessage()
 {
-    const char* path = "ux0:/data/RBXV00001/system/loader-message.txt";
+    const char* path = "ux0:/data/Bloxicon/system/loader-message.txt";
     recoverAtomicTarget(path);
     std::ifstream input(path);
     std::string message;
@@ -252,10 +251,10 @@ inline void scan(const std::string& root, const std::string& source, std::vector
 }
 inline std::vector<Place> places()
 {
-    sceIoMkdir("ux0:/data/RBXV00001", 0777);
-    sceIoMkdir("ux0:/data/RBXV00001/places", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon/places", 0777);
     std::vector<Place> result;
-    scan("ux0:/data/RBXV00001/places", "MY LEVELS", result);
+    scan("ux0:/data/Bloxicon/places", "MY LEVELS", result);
     scan("app0:/maps", "INSTALLED", result);
     std::stable_sort(result.begin(), result.end(), [](const Place& a, const Place& b) {
         if (a.source != b.source) return a.source == "MY LEVELS";
@@ -443,8 +442,7 @@ template<class Sampler> std::string choose(Sampler& sampler, RuntimeSettings& se
     size_t selected = 0;
     if (message.empty())
         message = takeLoaderMessage();
-    std::string last;
-    std::ifstream recent("ux0:/data/RBXV00001/system/last-place.txt"); std::getline(recent, last);
+    const std::string last=lastLoaderPlace();
     for (size_t i=0; i<list.size(); ++i) if (list[i].path == last) selected = i;
     unsigned previous = ~0u;
     bool wasTouch = false;
@@ -501,7 +499,7 @@ template<class Sampler> std::string choose(Sampler& sampler, RuntimeSettings& se
             std::ifstream input(list[selected].path, std::ios::binary | std::ios::ate);
             if (!input || input.tellg() <= 0) message = "Cannot read this file. Choose another level.";
             else {
-                std::ofstream save("ux0:/data/RBXV00001/system/last-place.txt"); save << list[selected].path << '\n';
+                saveLastLoaderPlace(list[selected].path);
                 beginFrame(); text(40,220,"LOADING " + list[selected].name,0xffffff,3,47);
                 text(40,278,"Large levels can take a minute to prepare.",0xa1b3c7);
                 vglSwapBuffers(GL_FALSE);
@@ -511,7 +509,7 @@ template<class Sampler> std::string choose(Sampler& sampler, RuntimeSettings& se
         beginFrame();
         rect(32,32,5,64,0x43d9ac); text(56,32,"BLOXICON / VITA",0xf4f7fb,4,32);
         text(58,77,"YOUR LEVELS. ORIGINAL GAMEPLAY.",0xa1b3c7);
-        text(32,113,message.empty() ? "ADD FILES: ux0:/data/RBXV00001/places" : message, message.empty()?0xa1b3c7:0xffb877,2,74);
+        text(32,113,message.empty() ? "ADD FILES: ux0:/data/Bloxicon/places" : message, message.empty()?0xa1b3c7:0xffb877,2,74);
         for (size_t i=selected/5*5; i<list.size() && i<selected/5*5+5; ++i) {
             const float y = 138 + (i%5)*60;
             rect(32,y,896,54,i==selected?0x234e56:0x182232);

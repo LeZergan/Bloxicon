@@ -200,7 +200,7 @@ void showAvatarImportHelp(Sampler& sampler,const RuntimeSettings& settings,Loade
         uiText(48,184,"Use the included avatar_import_local tool on your computer.",kUiText,20,864);
         uiText(48,220,"Choose a face, shirt, pants or T-shirt image, or a classic XML model.",kUiMuted,18,864);
         uiText(48,264,"Copy its content/avatar folder into:",kUiMuted,18,864);
-        uiText(48,292,"ux0:/data/RBXV00001/content/avatar",Design::focus,20,864,true);
+        uiText(48,292,"ux0:/data/Bloxicon/content/avatar",Design::focus,20,864,true);
         uiText(48,356,"Reopen Avatar. Your imported items appear beside the community wardrobe.",kUiMuted,18,864);
         }
         hints.draw(Design::margin,Design::promptsY,936,{{RBX::SDLK_GAMEPAD_BUTTONA,"Done"},{RBX::SDLK_GAMEPAD_BUTTONB,"Back"}});
@@ -389,7 +389,22 @@ template<class Sampler>
 std::string showAvatarEditor(Sampler& sampler,const RuntimeSettings& settings,VitaAvatar::EditorBackend& backend,LoaderInputHints& hints,LoaderPage& exitPage)
 {
     exitPage=PageHome;
-    drawLoadingCard(PageAvatar,settings,"YOUR AVATAR","Preparing your offline wardrobe...");
+    drawLoadingCard(PageAvatar,settings,"YOUR AVATAR","Loading your wardrobe. Press Back to cancel.");
+    backend.tickCatalogue();
+    const auto deadline=sceKernelGetSystemTimeWide()+28000000;
+    unsigned loadingButtons=~0u;
+    while(backend.cataloguePending() && sceKernelGetSystemTimeWide()<deadline)
+    {
+        SceCtrlData pad={};SceTouchData rear={};std::deque<SceTouchData> touches;
+        sampler.read(pad,touches,rear);
+        const auto buttons=VitaInput::menuButtons(pad.buttons,SCE_CTRL_CROSS,SCE_CTRL_CIRCLE,settings.acceptCircle);
+        if((buttons&~loadingButtons)&SCE_CTRL_CIRCLE)return {};
+        loadingButtons=buttons;
+        VitaAccount::connector().tick({},false);
+        backend.tickCatalogue();
+        loaderMusicTick();
+        sceKernelDelayThread(16000);
+    }
     if(!backend.open(avatarLegacyProfile(settings)))return backend.status();
     VitaAccount::connector().refreshAvatar();
     configureLoaderMusic(settings,true);
@@ -424,6 +439,22 @@ std::string showAvatarEditor(Sampler& sampler,const RuntimeSettings& settings,Vi
 #endif
     while(true)
     {
+        if(backend.updateCatalogue())
+        {
+            const auto oldKind=menu.tab().kind;
+            const auto oldCategory=menu.tab().category;
+            const auto oldQuery=menu.tab().query;
+            menu.build(backend.catalog(),backend.testing(),backend.selection());
+            for(size_t i=0;i<menu.count();++i){
+                menu.selectTab(i);
+                if(menu.tab().kind==oldKind && menu.tab().category==oldCategory)break;
+                if(i+1==menu.count())menu.selectTab(0);
+            }
+            if(menu.tab().kind==VitaAvatar::Editor::Kind::Items && menu.tab().category==oldCategory)
+                menu.tab().filterItems(oldQuery);
+            lastTab=lastPage=lastSavedRevision=~size_t(0);
+            waitingRelease=true;
+        }
         VitaAccount::connector().tick([&](const std::string& bytes){return backend.applyAccountProfile(bytes);},!backend.busy());
         const uint64_t now=sceKernelGetSystemTimeWide();
         const float dt=std::max(.001f,std::min(.1f,float(now-then)*.000001f)); then=now;
@@ -761,7 +792,7 @@ std::string showAvatarEditor(Sampler& sampler,const RuntimeSettings& settings,Vi
         if(!count.empty()) uiTextEllipsized(520,Design::headingCaptionY,count,kUiMuted,16,128,true);
         if(tab.kind==VitaAvatar::Editor::Kind::Items){
             uiRoundRect(812,60,136,44,8,Design::surface);
-            uiText(824,73,tab.query.empty()?"Search":"Clear search",Design::ink,18,108,true);
+            uiText(824,73,tab.query.empty()?"Search":"Clear search",Design::ink,18,116,true);
         }
         if(tab.kind==VitaAvatar::Editor::Kind::Colors)
         {
@@ -893,8 +924,8 @@ std::string showAvatarEditor(Sampler& sampler,const RuntimeSettings& settings,Vi
         if(tab.kind==VitaAvatar::Editor::Kind::Items && !categoryFocus)
             hints.draw(Design::margin,Design::promptsY,936,{
                 {RBX::SDLK_GAMEPAD_BUTTONA,avatarPrimaryAction(tab,outfit,false)},
-                {RBX::SDLK_GAMEPAD_BUTTONX,"Clear category"},
-                {RBX::SDLK_GAMEPAD_BUTTONSTART,fitId.empty()?(problem?"Outfit details":"Outfits & undo"):"Adjust fit"},
+                {RBX::SDLK_GAMEPAD_BUTTONX,"Clear items"},
+                {RBX::SDLK_GAMEPAD_BUTTONSTART,fitId.empty()?(problem?"Outfit details":"Outfits"):"Adjust fit"},
                 {RBX::SDLK_GAMEPAD_BUTTONY,"Reset view"},
                 {RBX::SDLK_GAMEPAD_BUTTONL1,"Tabs",RBX::SDLK_GAMEPAD_BUTTONR1},
                 {RBX::SDLK_GAMEPAD_BUTTONB,"Done"}},13);
@@ -904,14 +935,14 @@ std::string showAvatarEditor(Sampler& sampler,const RuntimeSettings& settings,Vi
                 {RBX::SDLK_GAMEPAD_BUTTONL1,"Tabs",RBX::SDLK_GAMEPAD_BUTTONR1},{RBX::SDLK_GAMEPAD_BUTTONB,"Done"}},13);
         else if(tab.kind==VitaAvatar::Editor::Kind::Saved && !tab.focusedSaved() && !categoryFocus)
             hints.draw(Design::margin,Design::promptsY,936,{
-                {RBX::SDLK_GAMEPAD_BUTTONSTART,"Outfits & undo"},
+                {RBX::SDLK_GAMEPAD_BUTTONSTART,"Outfits"},
                 {RBX::SDLK_GAMEPAD_BUTTONY,"Reset view"},
                 {RBX::SDLK_GAMEPAD_BUTTONL1,"Tabs",RBX::SDLK_GAMEPAD_BUTTONR1},
                 {RBX::SDLK_GAMEPAD_BUTTONB,"Done"}},13);
         else
             hints.draw(Design::margin,Design::promptsY,936,{
                 {RBX::SDLK_GAMEPAD_BUTTONA,avatarPrimaryAction(tab,outfit,categoryFocus)},
-                {RBX::SDLK_GAMEPAD_BUTTONSTART,fitId.empty()?(problem?"Outfit details":"Outfits & undo"):"Adjust fit"},
+                {RBX::SDLK_GAMEPAD_BUTTONSTART,fitId.empty()?(problem?"Outfit details":"Outfits"):"Adjust fit"},
                 {RBX::SDLK_GAMEPAD_BUTTONY,"Reset view"},
                 {RBX::SDLK_GAMEPAD_BUTTONL1,"Tabs",RBX::SDLK_GAMEPAD_BUTTONR1},
                 {RBX::SDLK_GAMEPAD_BUTTONB,"Done"}},13);

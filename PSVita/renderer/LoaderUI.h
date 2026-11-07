@@ -41,6 +41,9 @@
 #include "AvatarEditorModel.h"
 #include "AvatarWorkProfile.h"
 #include "VitaAccount.h"
+#include "VitaBadgeSync.h"
+#include "AvatarPackInstall.h"
+#include "AvatarServerCatalogue.h"
 #include "VitaCommunity.h"
 #include "LoaderCommunityLayout.h"
 #include "LoaderTransitionLayout.h"
@@ -230,7 +233,9 @@ class LoaderFont
         if(unicodeAttempted)return;
         unicodeAttempted=true;
         if(FT_Init_FreeType(&unicodeLibrary)!=0)return;
-        for(const char* root:{"ux0:/data/RBXV00001/content/fonts/","app0:/content/fonts/"}) {
+        for(const char* root:{"ux0:/data/Bloxicon/content/fonts/","app0:/content/fonts/"}) {
+            if(!unicodeRegular)FT_New_Face(unicodeLibrary,(std::string(root)+"Loader-Rodin.ttf").c_str(),0,&unicodeRegular);
+            if(!unicodeBold)FT_New_Face(unicodeLibrary,(std::string(root)+"Loader-Rodin.ttf").c_str(),0,&unicodeBold);
             if(!unicodeRegular)FT_New_Face(unicodeLibrary,(std::string(root)+"SourceSansPro-Regular.ttf").c_str(),0,&unicodeRegular);
             if(!unicodeBold)FT_New_Face(unicodeLibrary,(std::string(root)+"SourceSansPro-Bold.ttf").c_str(),0,&unicodeBold);
             if(!unicodeFallback)FT_New_Face(unicodeLibrary,(std::string(root)+"arial.ttf").c_str(),0,&unicodeFallback);
@@ -334,11 +339,16 @@ public:
         } ft;
         if (FT_Init_FreeType(&ft.library) != 0)
             return false;
-        for (const char* root: {"ux0:/data/RBXV00001/content/fonts/", "app0:/content/fonts/"})
+        bool rodin=false;
+        for (const char* root: {"ux0:/data/Bloxicon/content/fonts/", "app0:/content/fonts/"})
         {
+            if (!ft.regular){
+                ft.loadFace(std::string(root) + "Loader-Rodin.ttf", ft.regular, ft.regularBytes);
+                rodin=ft.regular!=NULL;
+            }
             if (!ft.regular)
                 ft.loadFace(std::string(root) + "SourceSansPro-Regular.ttf", ft.regular, ft.regularBytes);
-            if (!ft.bold)
+            if (!ft.bold && !rodin)
                 ft.loadFace(std::string(root) + "SourceSansPro-Bold.ttf", ft.bold, ft.boldBytes);
         }
         if (!ft.regular) return false;
@@ -351,7 +361,8 @@ public:
             std::vector<unsigned char> bitmap(atlasWidth * atlasHeight * 4, 255);
             for (size_t i = 3; i < bitmap.size(); i += 4) bitmap[i] = 0;
             int penX = 1, penY = 1, rowHeight = 0;
-            for (size_t weight = 0; weight < 2; ++weight)
+            const size_t weights=ft.bold?2:1;
+            for (size_t weight = 0; weight < weights; ++weight)
             {
                 FT_Face face = weight && ft.bold ? ft.bold : ft.regular;
                 for (size_t size = 0; size < Typography::sizes.size(); ++size)
@@ -388,6 +399,8 @@ public:
                     }
                 }
             }
+            if(weights==1)
+                std::copy_n(strikes.begin(),Typography::sizes.size(),strikes.begin()+Typography::sizes.size());
             // A shared gameplay context can leave a GL error behind during
             // teardown. Only errors from this upload should reject a new icon.
             for(unsigned stale=0;stale<8 && glGetError()!=GL_NO_ERROR;++stale) {}
@@ -550,7 +563,7 @@ public:
             return ready;
         attempted = true;
 
-        const std::string dataPath = std::string("ux0:/data/RBXV00001/ui2016/") + name;
+        const std::string dataPath = std::string("ux0:/data/Bloxicon/ui2016/") + name;
         const std::string appPath = std::string("app0:/ui2016/") + name;
         const char* paths[] = {dataPath.c_str(), appPath.c_str(), NULL};
 
@@ -1034,6 +1047,9 @@ inline void uiButtonRect(const Design::Rect& rawBox,bool selected=false,bool ena
     const auto box=Geometry::snapped(rawBox);if(box.w<4||box.h<4)return;
     const float radius=std::min(6.f,std::min(box.w,box.h)*.5f);
     const auto paint=Design::buttonPaint(selected,enabled);
+    if(selected&&enabled)
+        uiRoundFill(box.x-2,box.y-2,box.w+4,box.h+4,radius+2,Design::focus,
+            Design::focusGlowAlpha(sceKernelGetSystemTimeWide()));
     uiRoundFill(box.x-1,box.y+2,box.w+2,box.h+2,radius+1,0x000000,paint.outerShadow);
     uiRoundFill(box.x,box.y+2,box.w,box.h+1,radius,0x000000,paint.innerShadow);
     uiRoundFill(box.x,box.y,box.w,box.h,radius,paint.edge);
@@ -1062,6 +1078,7 @@ inline void uiFocusFrame(const Design::Rect& rawBox, unsigned color = Design::fo
             radius-edge+.5f,corner,step);
     }
     glEnd();
+    const unsigned outerAlpha=color==Design::focus?160+3*Design::focusGlowAlpha(sceKernelGetSystemTimeWide()):255;
     for(unsigned inner=0;inner<2;++inner)
     {
         glBegin(GL_TRIANGLE_STRIP);
@@ -1070,7 +1087,7 @@ inline void uiFocusFrame(const Design::Rect& rawBox, unsigned color = Design::fo
             const unsigned corner=(point/7)%4,step=point%7;
             const float opaqueInset=inner?edge-.5f:.5f;
             const float clearInset=inner?edge+.5f:-.5f;
-            glColor4ub((color >> 16)&255,(color >> 8)&255,color&255,255);
+            glColor4ub((color >> 16)&255,(color >> 8)&255,color&255,inner?255:outerAlpha);
             uiRoundPoint(box.x+opaqueInset,box.y+opaqueInset,box.w-2*opaqueInset,
                 box.h-2*opaqueInset,radius-opaqueInset,corner,step);
             glColor4ub((color >> 16)&255,(color >> 8)&255,color&255,0);
@@ -1187,7 +1204,7 @@ class LoaderInputHints
             const std::string relative = RBX::VitaInputGlyphs::imagePath(displayKey, false);
             if (!relative.empty())
             {
-                glyph.path = "ux0:/data/RBXV00001/content/" + relative;
+                glyph.path = "ux0:/data/Bloxicon/content/" + relative;
                 glyph.ready = glyph.texture.load(glyph.path);
                 if (!glyph.ready)
                 {
@@ -1199,23 +1216,23 @@ class LoaderInputHints
         return glyph.ready ? &glyph : NULL;
     }
 
-    float keyWidth(RBX::KeyCode key, float pixels)
+    float keyWidth(RBX::KeyCode key, float pixels, float icon)
     {
         if (key == RBX::SDLK_UNKNOWN) return 0;
-        return prepare(key) ? 28.f : loaderFont().measure(fallback(key), pixels);
+        return prepare(key) ? icon : std::ceil(loaderFont().measure(fallback(key), pixels));
     }
 
-    void drawKey(RBX::KeyCode key, float x, float y, float pixels, unsigned color)
+    void drawKey(RBX::KeyCode key, float x, float center, float pixels, float icon, unsigned color)
     {
         if (key == RBX::SDLK_UNKNOWN) return;
         if (CachedGlyph* glyph = prepare(key))
         {
             // Each vector-authored texture owns its silhouette and contrast
             // rim. A second square backing would hide the native button shape.
-            glyph->texture.drawFit(glyph->path, x, y, 28, 28);
+            glyph->texture.drawFit(glyph->path, x, std::round(center-icon*.5f), icon, icon);
         }
         else
-            uiText(x, y + (28 - pixels) * .5f, fallback(key), color, pixels);
+            uiText(x, center-pixels*.5f, fallback(key), color, pixels);
     }
 
 public:
@@ -1231,46 +1248,72 @@ public:
     {
         pixels = float(Typography::pixels(std::max(18.f, pixels)));
         touchAreas.clear();
-        const float end = x + std::max(0.f, width);
-        float keySpace = 0.f, labelSpace = 0.f;
-        size_t visible = 0;
-        for (const Hint& hint: hints)
-        {
-            if (!hint.label || !*hint.label || hint.key == RBX::SDLK_UNKNOWN) continue;
-            const float second = keyWidth(hint.second, pixels);
-            keySpace += keyWidth(hint.key, pixels) + (second ? 4 + second : 0) + 24;
-            labelSpace += loaderFont().measure(hint.label, pixels);
-            ++visible;
+        struct Prompt {
+            const Hint* hint;
+            float labelWidth,first=0,second=0,keys=0,width=0;
+            std::array<std::string,2> lines{};
+        };
+        std::vector<Prompt> prompts;
+        prompts.reserve(hints.size());
+        const auto measure=[&](const std::string& label){return std::ceil(loaderFont().measure(label,pixels));};
+        for(const Hint& hint:hints)
+            if(hint.label && *hint.label && hint.key!=RBX::SDLK_UNKNOWN)
+                prompts.push_back({&hint,measure(hint.label)});
+        if(prompts.empty()||width<=0)return;
+
+        float icon=28,padding=12,gutter=12,labelGap=8;
+        const auto layout=[&]{
+            float total=gutter*float(prompts.size()-1);
+            for(auto& prompt:prompts){
+                prompt.first=keyWidth(prompt.hint->key,pixels,icon);
+                prompt.second=keyWidth(prompt.hint->second,pixels,icon);
+                prompt.keys=prompt.first+(prompt.second?4+prompt.second:0);
+                prompt.width=std::max(44.f,padding*2+prompt.keys+labelGap+prompt.labelWidth);
+                total+=prompt.width;
+            }
+            return total;
+        };
+        float total=layout();
+        if(total>width){
+            icon=24;padding=8;gutter=8;labelGap=6;
+            total=layout();
         }
-        if (!visible) return;
-        const float gutter = 12;
-        const float available = std::max(0.f,width-keySpace-gutter*(visible-1)-4);
-        const float labelScale = labelSpace > available ? available / labelSpace : 1.f;
-        // Tinted glass controls retain 48px touch targets. Their complete
-        // shadow ends six pixels above the navigation indicator.
-        for (const Hint& hint: hints)
-        {
-            if (!hint.label || !*hint.label || hint.key == RBX::SDLK_UNKNOWN) continue;
-            const float first = keyWidth(hint.key, pixels);
-            const float second = keyWidth(hint.second, pixels);
-            const float keys = first + (second ? 4 + second : 0);
-            const float remaining = std::min(end-x-keys-24,
-                std::floor(loaderFont().measure(hint.label,pixels)*labelScale));
-            // Render whole controls only; no half-clipped icon at the safe edge.
-            if (remaining <= 0) break;
-            const std::string label = ellipsizedText(hint.label, pixels, remaining);
-            if (label.empty()) break;
-            const float textWidth = loaderFont().measure(label, pixels);
-            const float chipWidth = keys + 24 + textWidth;
-            const Design::Rect chip = Geometry::snapped({x, y - 6, chipWidth, 40});
+        if(total>width && pixels<=20){
+            // Keep every word in dense rows, including when icon files are missing.
+            for(auto& prompt:prompts){
+                const std::string label=prompt.hint->label;
+                for(auto split=label.find(' ');split!=std::string::npos;split=label.find(' ',split+1)){
+                    const auto first=label.substr(0,split),second=label.substr(split+1);
+                    const float wrapped=std::max(measure(first),measure(second));
+                    if(wrapped<prompt.labelWidth){
+                        prompt.lines={{first,second}};
+                        prompt.labelWidth=wrapped;
+                    }
+                }
+            }
+            total=layout();
+        }
+        const float extra=prompts.size()>=4?std::clamp(std::floor((width-total)/float(prompts.size())),0.f,12.f):0.f;
+        const float end=x+width;
+        for(const auto& prompt:prompts){
+            const Hint& hint=*prompt.hint;
+            const float chipWidth=prompt.width+extra;
+            if(x+chipWidth>end)break;
+            const auto chip=Geometry::snapped({x,y-6,chipWidth,40});
             uiButtonRect(chip);
-            const float groupX=chip.x+8;
-            drawKey(hint.key, groupX, chip.y+6, pixels, color);
-            if (second) drawKey(hint.second, groupX + first + 4, chip.y+6, pixels, color);
-            uiText(groupX+keys+8, chip.y+(chip.h-pixels)*.5f, label, color, pixels, textWidth);
+            const float groupX=chip.x+std::floor((chip.w-prompt.keys-labelGap-prompt.labelWidth)*.5f);
+            const float center=chip.y+chip.h*.5f,textX=groupX+prompt.keys+labelGap;
+            drawKey(hint.key,groupX,center,pixels,icon,color);
+            if(prompt.second)drawKey(hint.second,groupX+prompt.first+4,center,pixels,icon,color);
+            if(prompt.lines[0].empty())
+                uiText(textX,center-pixels*.5f,hint.label,color,pixels,prompt.labelWidth);
+            else {
+                uiText(textX,center-pixels-1,prompt.lines[0],color,pixels,prompt.labelWidth);
+                uiText(textX,center+1,prompt.lines[1],color,pixels,prompt.labelWidth);
+            }
             // Paired hints are naturally touched as "next/right"; direct page
             // tabs/categories remain independently touchable.
-            touchAreas.push_back({{chip.x,chip.y-2,chip.w,48}, second ? hint.second : hint.key});
+            touchAreas.push_back({{chip.x,chip.y-2,chip.w,48}, prompt.second ? hint.second : hint.key});
             x = chip.x + chip.w + gutter;
         }
     }
@@ -1451,7 +1494,7 @@ static const unsigned long long kVitaLocalPlaceLimitBytes = 30ull * 1024ull * 10
 
 inline const char* catalogFilterLabel(unsigned category)
 {
-    static const char* labels[]={"All games","Uploaded games","Tested games","Tester Picks"};
+    static const char* labels[]={"All games","Uploaded games","Tested games","Tester picks"};
     return labels[std::min<unsigned>(category,CatalogCategoryCount-1)];
 }
 
@@ -1646,7 +1689,8 @@ inline void drawChrome(LoaderPage page, const RuntimeSettings& settings, const s
     static const char* titles[]={"My games","Discover","Avatar","Settings","Home"};
     uiText(Design::headerTextX,12,titleOverride.empty()?titles[page]:titleOverride,Design::headerInk,26,Design::headerTextWidth,true);
     const auto brief=lowerCopy(status);
-    const bool important=brief.find("failed")!=std::string::npos||brief.find("could not")!=std::string::npos||
+    const bool important=brief.compare(0,8,"sign in ")==0||
+        brief.find("failed")!=std::string::npos||brief.find("could not")!=std::string::npos||
         brief.find("cannot")!=std::string::npos||brief.find("offline")!=std::string::npos||brief.find("expired")!=std::string::npos;
     if(important)uiTextEllipsized(420,18,status,Design::headerMuted,18,328);
     (void)settings;
@@ -1661,23 +1705,24 @@ inline void drawChrome(LoaderPage page, const RuntimeSettings& settings, const s
         const bool selected = tabPage == page;
         if(Design::bloxiconMode)uiButtonRect({x+6,501,width-12,38},selected);
         else if(selected)uiRoundRect(x+8,Design::tabsTop,width-16,3,1.5f,Design::focus);
+        constexpr float navPixels=20, iconSize=24, iconGap=10;
         static const auto widths=[&](){
             std::array<std::array<float,2>,PageCount> result{};
             for(unsigned j=0;j<PageCount;++j)for(unsigned bold=0;bold<2;++bold)
-                result[j][bold]=loaderFont().measure(titles[j],18,120,bold!=0);
+                result[j][bold]=std::ceil(loaderFont().measure(titles[j],navPixels,120,bold!=0));
             return result;
         }();
         const float labelWidth=widths[tabPage][selected];
-        const float iconX=x+(width-labelWidth-36)*.5f;
-        if(!drawPageIcon(unsigned(tabPage),selected,iconX,508,24))
+        const float iconX=std::round(x+(width-labelWidth-iconSize-iconGap)*.5f);
+        if(!drawPageIcon(unsigned(tabPage),selected,iconX,508,iconSize))
         {
             // Asset failure remains usable and visible instead of silently
             // removing the Avatar/Settings icon from the selected tab.
             const std::string fallback(1, pageCaption(tabPage)[0]);
             const float fw = loaderFont().measure(fallback, 18);
-            uiText(iconX+(24-fw)*.5f,510,fallback,selected?Design::focus:kUiMuted,18,24,true);
+            uiText(iconX+(iconSize-fw)*.5f,511,fallback,selected?Design::focus:kUiMuted,18,iconSize,true);
         }
-        uiText(iconX+36,510,titles[tabPage],selected?Design::focus:kUiMuted,18,x+width-iconX-48,selected);
+        uiText(iconX+iconSize+iconGap,510,titles[tabPage],selected?Design::focus:kUiMuted,navPixels,labelWidth,selected);
     }
 
 }
@@ -1771,6 +1816,13 @@ inline void drawAvatarPreview(const RuntimeSettings& settings, size_t selectedRo
     drawAvatarPart(cx + 4, 322, 36, 61, colors.rightLeg, selectedRow == 7);
 }
 
+inline void drawLoaderActivity(float x,float y,float pitch,float width,float height)
+{
+    const unsigned pulse=unsigned(sceKernelGetSystemTimeWide()/240000)%3;
+    for(unsigned i=0;i<3;++i)
+        uiRect(x+float(i)*pitch,y,width,height,i==pulse?Design::focus:Design::line);
+}
+
 inline void drawLoaderStatusScreen(const std::string& eyebrow,
                                    const std::string& title, const std::string& detail, bool showActivity = true)
 {
@@ -1798,9 +1850,7 @@ inline void drawLoaderStatusScreen(const std::string& eyebrow,
     const size_t detailFirst=lines.size()>2?size_t(sceKernelGetSystemTimeWide()/5000000)%((lines.size()+1)/2)*2:0;
     for(size_t i=detailFirst;i<std::min(detailFirst+2,lines.size());++i)centered(lines[i],346+float(i-detailFirst)*26,22,Design::muted,false);
     // An indeterminate pulse shows activity without inventing a percentage.
-    const unsigned pulse=unsigned(sceKernelGetSystemTimeWide()/240000)%3;
-    if(showActivity) for(unsigned i=0;i<3;++i)
-        uiRect(pulseX+float(i)*pulsePitch,pulseY,pulseWidth,pulseHeight,i==pulse?Design::focus:Design::line);
+    if(showActivity)drawLoaderActivity(pulseX,pulseY,pulsePitch,pulseWidth,pulseHeight);
 
 }
 
@@ -1884,12 +1934,13 @@ inline std::vector<std::string> detailDescriptionLines(const std::string& value,
 
 inline void saveLoaderState(LoaderPage page)
 {
+    if(!VitaLoaderDiagnostics::detailed().load(std::memory_order_relaxed))return;
     static LoaderStateWriter writer;
     static RBX::ThreadPool executor(1,RBX::BaseThreadPool::WaitForRunningTasks,1);
     writer.request(pageName(page),[&](std::function<void()> work) {
         return executor.schedule([work](boost::shared_ptr<rbx::spin_mutex>) {work();});
     },[](const std::string& value) {
-        std::ofstream state("ux0:/data/RBXV00001/system/loader-state.txt",std::ios::trunc);
+        std::ofstream state("ux0:/data/Bloxicon/system/logs/loader-state.txt",std::ios::trunc);
         if(state)state << value << '\n';
     });
 }
@@ -2148,7 +2199,7 @@ inline void drawHome(const RuntimeSettings& settings, const std::vector<Place>& 
             kUiMuted, 18, box.w - 80);
     }
 
-    uiText(12, 294, favoritesShelf ? "Favorites" : "More recent games", kUiText, 24, 500, true);
+    uiText(12, 294, favoritesShelf ? "Favorites" : "Recently played", kUiText, 24, 500, true);
     const size_t pages = shelf.empty() ? 0 : (shelf.size() + 2) / 3;
     if (pages > 1)
     {
@@ -2158,7 +2209,7 @@ inline void drawHome(const RuntimeSettings& settings, const std::vector<Place>& 
     if (shelf.empty())
     {
         uiRoundRect(12,336,936,104,10,kUiPanel);
-        uiText(24, 352, favoritesShelf ? "No installed favorites yet" : "Your next games belong here",
+        uiText(24, 352, favoritesShelf ? "No installed favorites yet" : "Played games appear here",
             kUiText, 18, 850, true);
         uiText(24, 398, favoritesShelf ? "Add a favorite from any game details page."
                                      : "Open a game from My games to see it here.",
@@ -2317,45 +2368,130 @@ inline bool loaderMenuRedraw(LoaderRenderCadence& cadence,const SceCtrlData& pad
 template<class Sampler>
 void showContentPacks(Sampler& sampler,const RuntimeSettings& settings){
     LoaderInputHints hints;unsigned previous=~0u;size_t selected=0;Design::StickNavigation stick;
-    auto packs=packResults();
-    for(const auto& path:userPacks())if(std::none_of(packs.begin(),packs.end(),[&](const auto& p){return p.path==path;}))packs.push_back({path,false});
-    std::vector<bool> installed;for(const auto& p:packs)installed.push_back(fileExists(p.path));
+    const char* labels[]={"Essential","Additions","Full catalogue"};
+    const char* descriptions[]={"Heads, faces, hair and clothing","Hats, accessories and bodies","Both packs for offline use"};
+    LoaderAsyncTask<std::string> install;
+    std::shared_ptr<VitaAvatar::AvatarPackAuthorization> authorization;
+    std::shared_ptr<VitaAvatar::AvatarPackProgress> progress;
+    std::string installAccount,installOrigin,installName,storage;
+    const char* installTitle=nullptr;
+    bool pending=false;
+    bool wasTouch=true;
+    const bool bundledEssential=VitaAvatar::hasOfflineCatalogue("essential");
+    bool essential=bundledEssential||!VitaAvatar::installedAvatarPacks("essential").empty();
+    bool additions=VitaAvatar::hasOfflineCatalogue("additions")||!VitaAvatar::installedAvatarPacks("additions").empty();
+    std::string message=bundledEssential ? "The starter wardrobe is ready offline. More items are available online." :
+        "Avatar items download as needed. Install packs for offline use.";
     #ifdef __vita__
     LoaderRenderCadence redraw(100000);
 #endif
     while(true){
+        // No avatar preview is open here. Let the account worker publish refreshes during long installs.
+        VitaAccount::connector().tick();
         SceCtrlData pad={};SceTouchData rear={};std::deque<SceTouchData> touches;sampler.read(pad,touches,rear);
         pad.buttons=VitaInput::menuButtons(pad.buttons,SCE_CTRL_CROSS,SCE_CTRL_CIRCLE,settings.acceptCircle);applyLoaderStick(pad,stick);
         const unsigned pressed=pad.buttons&~previous;previous=pad.buttons;
         if(pressed&SCE_CTRL_CIRCLE)return;
-        if((pressed&SCE_CTRL_UP)&&selected)--selected;if((pressed&SCE_CTRL_DOWN)&&selected+1<packs.size())++selected;
-        for(const auto& t:touches)if(t.reportNum){
+        if(!pending&&(pressed&SCE_CTRL_UP)&&selected)--selected;
+        if(!pending&&(pressed&SCE_CTRL_DOWN)&&selected+1<3)++selected;
+        bool activate=pressed&SCE_CTRL_CROSS;
+        for(const auto& t:touches){
+            const bool newTouch=t.reportNum&&!wasTouch;
+            wasTouch=t.reportNum!=0;
+            if(!newTouch)continue;
             const float x=t.report[0].x/2.f,y=t.report[0].y/2.f;
-            if(queueLoaderTab(x,y,PageSettings))return;
-            if(loaderControlMask(hints.hit(x,y))==SCE_CTRL_CIRCLE)return;
-            const size_t first=PackLayout::base(selected,packs.size());
-            for(size_t i=0;i<PackLayout::visible(packs.size());++i)if(PackLayout::row(i,packs.size()).contains(x,y)){selected=first+i;break;}
+            if(!pending&&queueLoaderTab(x,y,PageSettings))return;
+            const auto control=loaderControlMask(hints.hit(x,y));
+            if(control==SCE_CTRL_CIRCLE)return;
+            if(pending)continue;
+            activate=activate||control==SCE_CTRL_CROSS;
+            for(size_t i=0;i<3;++i)if(PackLayout::row(i,3).contains(x,y)){selected=i;break;}
+        }
+        if(pending){
+            std::string origin,token;
+            if(VitaAccount::connector().accountId()!=installAccount){
+                install.cancel();
+                authorization->publish({});
+            }else{
+                if(authorization->takeRefreshRequest())VitaAccount::connector().verifyOnline();
+                if(!VitaAccount::connector().communitySession(origin,token)||origin!=installOrigin)token.clear();
+                authorization->publish(std::move(token));
+            }
+            std::string result,error;
+            const auto state=install.poll(result,error);
+            if(state!=decltype(install)::Pending){
+                pending=false;
+                message=state==decltype(install)::Ready?result:"Avatar pack installation was interrupted.";
+                essential=bundledEssential||!VitaAvatar::installedAvatarPacks("essential").empty();
+                additions=VitaAvatar::hasOfflineCatalogue("additions")||!VitaAvatar::installedAvatarPacks("additions").empty();
+            }
+        }else if(activate&&install.settled()){
+            std::string origin,token;
+            if(!VitaAccount::connector().communitySession(origin,token))
+                message="Connect your Bloxicon account before downloading packs.";
+            else{
+                installAccount=VitaAccount::connector().accountId();
+                installOrigin=origin;
+                authorization=std::make_shared<VitaAvatar::AvatarPackAuthorization>();
+                progress=std::make_shared<VitaAvatar::AvatarPackProgress>();
+                installName=VitaAccount::connector().username();
+                unsigned long long freeBytes=0;
+                storage=ux0FreeBytes(freeBytes)?std::to_string(freeBytes/(1024*1024))+" MiB free":"Storage check unavailable";
+                installTitle=labels[selected];
+                authorization->publish(std::move(token));
+                pending=install.start(VitaAvatar::scheduleAvatarPack,[origin,authorization,selected,progress](const std::atomic<bool>& cancel){
+                    try{return VitaAvatar::installAvatarPacks(origin,*authorization,VitaAvatar::AvatarPackSelection(selected),cancel,*progress);}
+                    catch(const std::exception& error){return std::string(error.what());}
+                });
+                if(!pending)message="Downloads are busy. Try again.";
+            }
         }
         #ifdef __vita__
         if(!loaderMenuRedraw(redraw,pad,touches))continue;
 #endif
-        loaderFrame();drawChrome(PageSettings,settings,"Add accessory .pac files to RBXV00001/accessories, then restart");
-        uiText(12,60,"Offline content packs",Design::ink,Design::title,816,true);
-        uiText(856,72,std::to_string(packs.empty()?0:selected+1)+" / "+std::to_string(packs.size()),Design::muted,20,80,true);
-        uiText(12,Design::headingCaptionY,"Assets, wardrobe items, music and interface artwork.",Design::muted,16,912);
-        const size_t base=PackLayout::base(selected,packs.size());
-        for(size_t i=base;i<base+PackLayout::visible(packs.size());++i){const auto box=PackLayout::row(i-base,packs.size());const float y=box.y;
+        if(pending){
+            using Progress=VitaAvatar::AvatarPackProgress;
+            const auto phase=progress->phase.load();
+            const auto total=progress->total.load();
+            const auto current=progress->current.load();
+            const auto ready=std::min(total,progress->ready.load()+progress->retained.load()+current);
+            const auto elapsed=sceKernelGetSystemTimeWide()-progress->transferStarted.load();
+            std::string time="Estimating time";
+            if(phase==Progress::Downloading && current>=64*1024 && elapsed>=2000000 && ready<total){
+                const auto seconds=std::min<uint64_t>(86400,(total-ready)*elapsed/current/1000000+1);
+                time=seconds>=60?"About "+std::to_string((seconds+59)/60)+" min left":
+                    "About "+std::to_string(seconds)+" sec left";
+            }
+            const char* state=phase==Progress::Downloading?"Downloading":phase==Progress::Verifying?"Verifying":
+                phase==Progress::Finishing?"Saving pack":total?"Checking files":"Checking pack list";
+            std::string detail=state;
+            if(total){
+                detail+="  /  "+std::to_string(ready*100/total)+"%  /  "+std::to_string(progress->verified.load())+
+                    " of "+std::to_string(progress->parts.load())+" parts";
+                if(phase==Progress::Downloading)detail+="  /  "+time;
+            }
+            drawLoaderStatusScreen("INSTALLING AVATAR PACKS",installTitle,detail);
+            const auto mib=[](uint64_t bytes){return std::to_string(bytes/(1024*1024));};
+            const std::string bytes=total?"  /  "+mib(ready)+" of "+mib(total)+" MiB ready  /  "+
+                mib(progress->transferred.load()+(phase==Progress::Downloading?current:0))+" MiB downloaded":"";
+            uiTextEllipsized(24,451,installName+"  /  "+storage+" at start"+bytes,Design::muted,16,912);
+            hints.draw(Design::margin,Design::promptsY,936,{{RBX::SDLK_GAMEPAD_BUTTONB,"Cancel"}});
+            vglSwapBuffers(GL_FALSE);
+            continue;
+        }
+        loaderFrame();drawChrome(PageSettings,settings,"Avatar packs");
+        uiText(12,60,"Offline avatar packs",Design::ink,Design::title,816,true);
+        uiTextEllipsized(12,Design::headingCaptionY,message,Design::muted,16,912);
+        for(size_t i=0;i<3;++i){const auto box=PackLayout::row(i,3);const float y=box.y;
             uiRoundRect(box.x,box.y,box.w,box.h,10,i==selected?Design::focusFill:Design::surface);
-            const auto slash=packs[i].path.find_last_of('/');
             const auto stack=Geometry::textStack(box.h,22,16,1);
-            uiTextEllipsized(24,y+stack.titleY,packs[i].path.substr(slash+1),Design::ink,22,600,i==selected);
-            uiTextEllipsized(24,y+stack.detailY,packs[i].path,Design::muted,16,864);
-            const std::string status=packs[i].loaded?"LOADED":installed[i]?"CHECK / RESTART":"NOT INSTALLED";
-            const float statusWidth=std::min(264.f,loaderFont().measure(status,18,120,true));
-            uiTextEllipsized(936-statusWidth,y+stack.titleY+3,status,i==selected?Design::focus:Design::ink,18,statusWidth,true);
+            uiText(24,y+stack.titleY,labels[i],Design::ink,22,600,i==selected);
+            uiText(24,y+stack.detailY,descriptions[i],Design::muted,16,864);
+            const bool installed=i==0?essential:i==1?additions:essential&&additions;
+            if(installed)uiText(785,y+stack.titleY,"Installed",Design::muted,18,144,true);
         }
         
-        hints.draw(Design::margin,Design::promptsY,936,{{RBX::SDLK_GAMEPAD_DPADUP,"Scroll",RBX::SDLK_GAMEPAD_DPADDOWN},{RBX::SDLK_GAMEPAD_BUTTONB,"Back"}});vglSwapBuffers(GL_TRUE);
+        hints.draw(Design::margin,Design::promptsY,936,{{RBX::SDLK_GAMEPAD_BUTTONA,pending?"":"Install"},{RBX::SDLK_GAMEPAD_DPADUP,"Select",RBX::SDLK_GAMEPAD_DPADDOWN},{RBX::SDLK_GAMEPAD_BUTTONB,"Back"}});vglSwapBuffers(GL_TRUE);
     }
 }
 
@@ -2415,14 +2551,16 @@ void showPlaceSettings(Sampler& sampler,const RuntimeSettings& global,const std:
             uiRoundRect(12,y,936,48,10,i==selected?Design::focusFill:Design::surface);
             uiText(24,y+4,SettingsUI::rows()[fields[i]].label,Design::ink,22,580,i==selected);
             uiTextEllipsized(24,y+28,SettingsUI::rows()[fields[i]].detail,Design::muted,16,580);
-            const auto value=SettingsUI::value(custom,fields[i]);const float size=loaderFont().measure(value,26,120,true)>254?18:26;
-            const float width=std::min(254.f,loaderFont().measure(value,size,120,true));
+            const auto value=SettingsUI::value(custom,fields[i]);
+            const auto measure=[&](float size){return loaderFont().measure(value,size,120,true);};
+            const float size=Typography::fitPixels(24,264,measure);
+            const float width=std::min(264.f,std::ceil(measure(size)));
             uiTextEllipsized(936-width,y+(48-size)*.5f,value,i==selected?Design::focus:Design::ink,size,width,true);
         }
         
         
         hints.draw(Design::margin,Design::promptsY,936,{{RBX::SDLK_GAMEPAD_BUTTONA,"Change"},{RBX::SDLK_GAMEPAD_BUTTONB,"Back"},
-            {RBX::SDLK_GAMEPAD_DPADLEFT,"Adjust",RBX::SDLK_GAMEPAD_DPADRIGHT},{RBX::SDLK_GAMEPAD_BUTTONX,"Description"},{RBX::SDLK_GAMEPAD_BUTTONY,"Use global"}});
+            {RBX::SDLK_GAMEPAD_DPADLEFT,"Adjust",RBX::SDLK_GAMEPAD_DPADRIGHT},{RBX::SDLK_GAMEPAD_BUTTONX,"Help"},{RBX::SDLK_GAMEPAD_BUTTONY,"Use global"}});
         vglSwapBuffers(GL_TRUE);
     }
 }
@@ -2430,9 +2568,9 @@ void showPlaceSettings(Sampler& sampler,const RuntimeSettings& global,const std:
 inline void drawBrowseFilter(const Design::Rect& box, const char* label, bool active)
 {
     uiButtonRect(box,active);
-    const float width = loaderFont().measure(label, 18, 120, active);
-    uiText(box.x + (box.w - width) * .5f, box.y + (box.h-18)*.5f, label,
-        active ? Design::focus : Design::muted, 18, std::min(box.w - 16,(box.w + width) * .5f - 8), active);
+    const float width=std::min(box.w-16,std::ceil(loaderFont().measure(label,18,120,active)));
+    uiTextEllipsized(box.x+(box.w-width)*.5f,box.y+(box.h-18)*.5f,label,
+        active?Design::focus:Design::muted,18,width,active);
     if (active) uiRect(box.x + 12, box.y + box.h - 4, box.w - 24, 3, Design::focus);
 }
 
@@ -2571,7 +2709,11 @@ GameDetailAction showGameDetails(Sampler& sampler,const RuntimeSettings& setting
         uiRoundRect(24,72,280,176,Design::imageRadius,Design::subtle);
         if(!displayedPreview.empty()){
             previewTextures[visiblePreview].drawReadyCover(24,72,280,176,Design::imageRadius);
-            if(displayedMap){uiRoundRect(32,80,112,26,4,Design::surface);uiText(40,84,"Map preview",Design::muted,18,96);}
+            if(displayedMap){
+                const float width=std::ceil(loaderFont().measure("Map preview",18));
+                uiRoundRect(32,80,width+16,26,4,Design::surface);
+                uiText(40,84,"Map preview",Design::muted,18,width);
+            }
         }else uiText(40,148,pending?"Loading preview":"Game preview",Design::muted,20,248);
         for(size_t i=0;i<std::min<size_t>(4,names.size());++i){
             const auto line=i==3&&names.size()>4?names[i]+"...":names[i];
@@ -2591,7 +2733,11 @@ GameDetailAction showGameDetails(Sampler& sampler,const RuntimeSettings& setting
         for(size_t i=0;i<buttons.size();++i){const auto r=Design::Rect{12+float(i)*(width+gap),384,width,56};const bool focus=i==selected;
             uiButtonRect(r,focus);
             if(focus)uiFocusFrame(r,Design::focus,Design::controlRadius);
-            uiTextEllipsized(r.x+12,r.y+17,buttons[i].label,focus?Design::focus:Design::ink,22,r.w-24,true);
+            const auto& label=buttons[i].label;
+            const auto measure=[&](float size){return loaderFont().measure(label,size,120,true);};
+            const float size=Typography::fitPixels(22,r.w-20,measure);
+            const float textWidth=std::min(r.w-20,std::ceil(measure(size)));
+            uiTextEllipsized(r.x+(r.w-textWidth)*.5f,r.y+(r.h-size)*.5f,label,focus?Design::focus:Design::ink,size,textWidth,true);
         }
         hints.draw(12,Design::promptsY,936,{{RBX::SDLK_GAMEPAD_BUTTONA,confirmRemove?"Confirm":"Select"},
             {RBX::SDLK_GAMEPAD_BUTTONX,installed?(tab==GameDetails::Storage&&!sizeWarning?"Auto preview":"Settings"):""},{RBX::SDLK_GAMEPAD_BUTTONB,confirmRemove?"Cancel":"Back"},
@@ -2882,12 +3028,12 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
     std::vector<Place> local = places();
     CatalogIndexedView<CatalogItem> catalogAll;
     CatalogIndexedView<CatalogItem> catalog;
-    std::vector<std::string> favorites = readNameList("ux0:/data/RBXV00001/system/favorites.txt");
-    std::vector<std::string> recents = readNameList("ux0:/data/RBXV00001/system/recent-games.txt");
+    std::vector<std::string> favorites = readNameList(LoaderRecord::Favorites);
+    std::vector<std::string> recents = readNameList(LoaderRecord::Recent);
     std::string catalogQuery;
     std::string catalogYear;
     unsigned catalogCategory = CatalogAll;
-    bool catalogLoaded = false, catalogCacheOnly = true;
+    bool catalogLoaded = false;
     LoaderAsyncTask<CatalogReply> catalogTask;
     bool catalogQueued = false, catalogPending = false, catalogForceRefresh = false;
     uint64_t catalogueRefreshAt=0;
@@ -2924,9 +3070,7 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
         selected[PagePlay]=library.localIndex();page=PagePlay;saveLoaderState(page);
         libraryArtwork.invalidate();discoverArtwork.invalidate();catalogBadges.invalidate();homeDirty=true;message.clear();
     };
-    std::string last;
-    std::ifstream recent("ux0:/data/RBXV00001/system/last-place.txt");
-    std::getline(recent, last);
+    const std::string last=lastLoaderPlace();
     for (size_t i = 0; i < local.size(); ++i)
         if (local[i].path == last)
             selected[PagePlay] = i;
@@ -2979,6 +3123,7 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
             message="Title matches only. Check the tested original revision.";
         }
         if(avatarEditor)avatarEditor->tickCatalogue();
+        badgeSync().tick();
         if(page==PageAvatar && avatarEditor)
         {
             catalogTask.cancel(); catalogPending=catalogQueued=false;
@@ -3012,9 +3157,18 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
                 std::fprintf(stderr, "Vita Catalog leave pending %d\n", int(catalogPending));
             catalogTask.cancel();
             catalogPending = catalogQueued = false;
+            if (catalogLoaded)
+            {
+                catalog = {};
+                selected[PageCatalog] = 0;
+                catalogBadges.invalidate();
+            }
+            catalogLoaded = false;
         }
         if (page == PageCatalog && !catalogLoaded)
         {
+            catalogAll = {};
+            catalog = {};
             catalogLoaded = true;
             catalogQueued = true;
             catalogForceRefresh = false;
@@ -3022,7 +3176,7 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
         }
 
         if(page==PageCatalog&&catalogLoaded&&!catalogPending&&!catalogQueued&&catalogueRefreshAt&&sceKernelGetSystemTimeWide()>=catalogueRefreshAt){
-            catalogQueued=true;catalogCacheOnly=false;catalogForceRefresh=false;catalogueRefreshAt=sceKernelGetSystemTimeWide()+15000000;
+            catalogQueued=true;catalogForceRefresh=false;catalogueRefreshAt=sceKernelGetSystemTimeWide()+15000000;
         }
         const size_t focusBefore=page==PageHome?homeFocus.slot:page==PagePlay?library.position:selected[page];
         const size_t shelfBefore=homeFocus.shelfPage;
@@ -3327,8 +3481,8 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
             if (pressed & SCE_CTRL_TRIANGLE)
             {
                 reloadLocal();
-                favorites = readNameList("ux0:/data/RBXV00001/system/favorites.txt");
-                recents = readNameList("ux0:/data/RBXV00001/system/recent-games.txt");
+                favorites = readNameList(LoaderRecord::Favorites);
+                recents = readNameList(LoaderRecord::Recent);
                 refreshHome();
                 selected[PagePlay] = std::min(selected[PagePlay], local.empty() ? size_t(0) : local.size() - 1);
                 message = "Local library, recent games and favorites refreshed.";
@@ -3421,9 +3575,7 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
             {
                 loaderUiSounds().play(UiSound::Press);
                 const Place chosen = local[homePlace != Home::noPlace ? homePlace : selected[PagePlay]];
-                const CatalogItem* catalogMatch = catalogLoaded
-                    ? findCatalogItemForInstalled(chosen.path, chosen.name, catalogAll.records())
-                    : NULL;
+                const CatalogItem* catalogMatch = findCatalogItemForInstalled(chosen.path, chosen.name, catalogAll.records());
                 GameDetailAction action;
                 do {
                     action = showGameDetails(sampler, settings, page,
@@ -3442,7 +3594,7 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
                     homeDirty=true;
                     continue;
                 }
-                favorites = readNameList("ux0:/data/RBXV00001/system/favorites.txt");
+                favorites = readNameList(LoaderRecord::Favorites);
                 library.rebuild(local, recents, favorites);
                 libraryArtwork.invalidate();
                 homeDirty = true;
@@ -3486,13 +3638,11 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
                             (!catalogMatch->size || catalogMatch->size ==
                                 static_cast<unsigned long long>(input.tellg())))
                             pendingServerSourceUrl() = catalogMatch->url;
-                        std::ofstream save("ux0:/data/RBXV00001/system/last-place.txt", std::ios::trunc);
-                        save << chosen.path << '\n';
+                        saveLastLoaderPlace(chosen.path);
                         pendingLaunchMode() = action == DetailHost ? LaunchAdhocHost :
                             ((action == DetailJoinNearby || action == DetailJoinAdhoc) ? LaunchAdhocJoin : LaunchSolo);
                         pendingJoinViaWifi() = action == DetailJoinNearby;
-                        noteRecent(chosen.name);
-                        recents = readNameList("ux0:/data/RBXV00001/system/recent-games.txt");
+                        recents = readNameList(LoaderRecord::Recent);
                         presentLoaderProgress(settings, page, ProgressUI::launch(detailTitle(chosen.name),
                             action == DetailHost ? ProgressUI::Host :
                             ((action == DetailJoinNearby || action == DetailJoinAdhoc) ? ProgressUI::JoinNearby : ProgressUI::Launch)));
@@ -3577,7 +3727,7 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
                     homeDirty=true;
                     continue;
                 }
-                favorites = readNameList("ux0:/data/RBXV00001/system/favorites.txt");
+                favorites = readNameList(LoaderRecord::Favorites);
                 homeDirty = true;
                 previous = ~0u;
 
@@ -3597,13 +3747,11 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
                 {
                     if(action==DetailJoinNearby&&!requireOnlineAccount(sampler,settings)){consumeModalInput();continue;}
                     if (action == DetailHost) chooseServerName(settings);
-                    std::ofstream save("ux0:/data/RBXV00001/system/last-place.txt", std::ios::trunc);
-                    save << installedPath << '\n';
+                    saveLastLoaderPlace(installedPath);
                     pendingLaunchMode() = action == DetailHost ? LaunchAdhocHost :
                         ((action == DetailJoinNearby || action == DetailJoinAdhoc) ? LaunchAdhocJoin : LaunchSolo);
                     pendingJoinViaWifi() = action == DetailJoinNearby;
-                    noteRecent(chosen.name);
-                    recents = readNameList("ux0:/data/RBXV00001/system/recent-games.txt");
+                    recents = readNameList(LoaderRecord::Recent);
                     presentLoaderProgress(settings, page, ProgressUI::launch(detailTitle(chosen.name),
                         action == DetailHost ? ProgressUI::Host :
                         ((action == DetailJoinNearby || action == DetailJoinAdhoc) ? ProgressUI::JoinNearby : ProgressUI::Launch)));
@@ -3768,19 +3916,24 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
             {
                 auto filtered = filterCatalogView(reply.items, catalogQuery, catalogCategory, catalogYear);
                 const size_t focus = catalogSelectionForReply(catalog, selected[PageCatalog], filtered);
+                catalogPending = false;
+                catalogueRefreshAt = sceKernelGetSystemTimeWide() + 15000000;
                 catalogAll = std::move(reply.items);
                 catalog = std::move(filtered);
                 selected[PageCatalog] = focus;
                 catalogBadges.invalidate();
                 message = reply.status;
-                catalogPending = false;catalogueRefreshAt=sceKernelGetSystemTimeWide()+15000000;
-                if(catalogCacheOnly) {catalogCacheOnly=false;catalogQueued=true;}
                 std::fprintf(stderr, "Vita Catalog async complete items %u\n", unsigned(catalog.size()));
             }
             else if (state == LoaderAsyncTask<CatalogReply>::Failed || state == LoaderAsyncTask<CatalogReply>::Cancelled)
             {
                 catalogPending = false;
-                message = "Online sources unavailable. Cached games remain available.";
+                catalogAll = {};
+                catalog = {};
+                selected[PageCatalog] = 0;
+                catalogBadges.invalidate();
+                catalogueRefreshAt = sceKernelGetSystemTimeWide() + 5000000;
+                message = "Discover unavailable. Installed games are in My Games.";
             }
         }
 
@@ -3855,7 +4008,7 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
             const AvatarColors colors = avatarColors(settings);
             const char* labels[] = {
                 "Username", "Preset", "Head", "Torso",
-                "Left Arm", "Right Arm", "Left Leg", "Right Leg"
+                "Left arm", "Right arm", "Left leg", "Right leg"
             };
             std::string values[8];
             values[0] = playerName(settings);
@@ -3893,11 +4046,10 @@ std::string chooseModern(Sampler& sampler, RuntimeSettings& settings, std::strin
         {
             // Publish the loading screen before scheduling any HTTP work.
             const bool force = catalogForceRefresh;
-            const bool cacheOnly = catalogCacheOnly;
-            catalogTask.start(scheduleCatalogTask, [force,cacheOnly](const std::atomic<bool>& cancelled) {
-                return requestCatalog(force, cancelled, cacheOnly);
+            catalogPending = catalogTask.start(scheduleCatalogTask, [force](const std::atomic<bool>& cancelled) {
+                return requestCatalog(force, cancelled);
             });
-            catalogPending = true;
+            if (!catalogPending) catalogueRefreshAt = sceKernelGetSystemTimeWide() + 1000000;
             catalogQueued = false;
             std::fprintf(stderr, "Vita Catalog async begin force %d\n", int(force));
         }

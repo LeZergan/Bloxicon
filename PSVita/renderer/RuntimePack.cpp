@@ -142,7 +142,7 @@ bool userOverride(const std::string& name) {
 }
 std::string key(const char* path) {
     if(!path) return {};
-    static const char data[]="ux0:/data/RBXV00001/",app[]="app0:/";
+    static const char data[]="ux0:/data/Bloxicon/",app[]="app0:/";
     const char* relative;
     if(std::strncmp(path,data,sizeof(data)-1)==0) relative=path+sizeof(data)-1;
     else if(std::strncmp(path,app,sizeof(app)-1)==0) relative=path+sizeof(app)-1;

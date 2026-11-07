@@ -69,7 +69,7 @@ inline std::string pathStem(const std::string& path)
     char hex[17];
     for (int i = 15; i >= 0; --i) { hex[i] = digits[hash & 15]; hash >>= 4; }
     hex[16] = '\0';
-    return std::string("ux0:/data/RBXV00001/system/place-cache/") + hex;
+    return std::string("ux0:/data/Bloxicon/system/place-cache/") + hex;
 }
 
 inline std::string dataPath(const std::string& path) { return pathStem(path) + ".rbxl"; }

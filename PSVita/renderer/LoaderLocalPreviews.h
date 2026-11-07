@@ -13,7 +13,7 @@
 #include <memory>
 
 namespace VitaBrowser { namespace LocalPreviews {
-inline const char* directory(){return "ux0:/data/RBXV00001/system/local-previews";}
+inline const char* directory(){return "ux0:/data/Bloxicon/system/local-previews";}
 inline std::string preference(){return std::string(directory())+"/enabled";}
 inline bool generated(const std::string& path){return path.compare(0,std::strlen(directory()),directory())==0;}
 inline void makeDirectory(){sceIoMkdir(directory(),0777);}

@@ -29,7 +29,7 @@ struct DetailsNetworkOperations {
     std::shared_ptr<DetailsPublication> publication;
     bool image(const std::string& url,const std::string& target,std::string& result,std::string& error,const std::atomic<bool>& cancelled){
         if(cancelled.load()||!trustedPlaceArtworkUrl(url)||target.empty())return false;
-        sceIoMkdir("ux0:/data/RBXV00001/system/thumbnails",0777);
+        sceIoMkdir("ux0:/data/Bloxicon/system/thumbnails",0777);
         const auto staged=publication->stage(target);
         try{
 #if defined(RBX_PLATFORM_PSVITA)
@@ -96,7 +96,7 @@ inline DetailsMedia publishDetailsMedia(DetailsTaskResult& result){
         if(!validCachedPng(image.staged)||std::rename(image.staged.c_str(),image.finalPath.c_str())!=0)media.thumbnailPath.clear();
     }
     if(!result.publication->metadataJson.empty()){
-        sceIoMkdir("ux0:/data/RBXV00001/system/game-info",0777);
+        sceIoMkdir("ux0:/data/Bloxicon/system/game-info",0777);
         writeAtomic(result.publication->metadataPath,result.publication->metadataJson);
     }
     return media;

@@ -28,7 +28,7 @@ int worker(SceSize,void*){
     SceUID previousIds[capacity]{};uint64_t previousClocks[capacity]{};
     uint64_t previousTime=0;const uint64_t start=sceKernelGetSystemTimeWide();
     char path[160],staging[176];
-    std::snprintf(path,sizeof(path),"ux0:/data/RBXV00001/system/cpu-capture-%s.json",requestId);
+    std::snprintf(path,sizeof(path),"ux0:/data/Bloxicon/system/cpu-capture-%s.json",requestId);
     std::snprintf(staging,sizeof(staging),"%s.writing",path);
     for(unsigned sample=0;capture.load()&&sceKernelGetSystemTimeWide()-start<uint64_t(durationSeconds)*1000000;++sample){
         const uint64_t now=sceKernelGetSystemTimeWide(),elapsed=previousTime?now-previousTime:0;
@@ -68,11 +68,11 @@ int worker(SceSize,void*){
 }
 struct StartCapture{
     StartCapture(){
-        const char* path="ux0:/data/RBXV00001/system/cpu-capture-request.json";
+        const char* path="ux0:/data/Bloxicon/system/cpu-capture-request.json";
         FILE* file=std::fopen(path,"rb");if(!file)return;
         char bytes[128]{};const auto size=std::fread(bytes,1,sizeof(bytes)-1,file);const bool good=!std::ferror(file);std::fclose(file);
         if(!good||!size||size>=sizeof(bytes)-1||std::sscanf(bytes,"{\"id\":\"%16[0123456789abcdef]\",\"seconds\":%u}",requestId,&durationSeconds)!=2||std::strlen(requestId)!=16||durationSeconds<30||durationSeconds>900)return;
-        char used[160];std::snprintf(used,sizeof(used),"ux0:/data/RBXV00001/system/cpu-capture-%s.consumed.json",requestId);
+        char used[160];std::snprintf(used,sizeof(used),"ux0:/data/Bloxicon/system/cpu-capture-%s.consumed.json",requestId);
         if(std::rename(path,used)!=0)return;
         capture.store(true);remember(sceKernelGetThreadId());
         const auto thread=__real_sceKernelCreateThread("rbx_cpu_capture",worker,0x10000100,0x10000,0,SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT,nullptr);

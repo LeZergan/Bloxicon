@@ -13,6 +13,8 @@ public:
     virtual ~EditorBackend() {}
     virtual bool open(const Profile& legacy) = 0;
     virtual void tickCatalogue() {}
+    virtual bool updateCatalogue() { return false; }
+    virtual bool cataloguePending() const { return false; }
     virtual bool usesServerCatalogue() const { return false; }
     virtual void close() = 0;
     virtual const Catalog& catalog() const = 0;

@@ -10,7 +10,7 @@ inline std::string placeDataKey(std::string path) {
     static const char hex[]="0123456789abcdef";std::string key;
     for(unsigned char byte:hash){key+=hex[byte>>4];key+=hex[byte&15];}return key;
 }
-inline std::string placeDataRoot(const std::string& path) { return "ux0:/data/RBXV00001/system/local-saves/v1/"+placeDataKey(path); }
+inline std::string placeDataRoot(const std::string& path) { return "ux0:/data/Bloxicon/system/local-saves/v1/"+placeDataKey(path); }
 inline void recordPlaceVisit(const std::string& path,const std::string& name) {
     const auto root=placeDataRoot(path);RBX::VitaLegacySave::directories(root);
     std::ostringstream text;text<<"path="<<metadataSingleLine(path)<<"\nname="<<metadataSingleLine(name)<<"\nlast_played="<<std::time(nullptr)<<'\n';

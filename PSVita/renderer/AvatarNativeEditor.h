@@ -51,7 +51,7 @@ public:
     bool read(std::string& value) { return readBounded(path_,kMaxProfileBytes,value,true); }
     bool stage(const std::string& value)
     {
-        sceIoMkdir("ux0:/data/RBXV00001/system/avatar",0777);
+        sceIoMkdir("ux0:/data/Bloxicon/system/avatar",0777);
         std::ofstream file(path_+".tmp",std::ios::binary|std::ios::trunc);
         file.write(value.data(),value.size()); file.flush();
         const bool written=file.good(); file.close();
@@ -78,94 +78,9 @@ inline VerifiedOutfit verifyPreviewEdit(const Catalog& catalog,const Profile& ef
     }
     return result;
 }
-inline bool loadInstalledWardrobe(bool& community,std::shared_ptr<const Catalog>& snapshot,std::string& error,
-    std::vector<std::pair<std::string,std::string>>* cachedInputs=NULL)
+inline bool loadServerWardrobe(std::shared_ptr<const Catalog>& snapshot,std::string& error)
 {
-    if(VitaBrowser::serverCataloguesEnabled())return serverCatalogue().read(snapshot,error);
-    Catalog combined;
-    // The owned catalogue is authoritative. An existing damaged/unreadable
-    // owned index must not silently switch the user to a different wardrobe.
-    std::string primaryPath;
-    bool owned=false;
-    for(const auto& path:{std::string(dataRoot())+"catalog/bloxicon.v1",std::string("app0:/content/avatar/catalog/bloxicon.v1")}) {
-        errno=0;FILE* probe=std::fopen(path.c_str(),"rb");
-        if(probe){std::fclose(probe);primaryPath=path;owned=true;break;}
-        if(errno!=ENOENT){error="Could not read the Bloxicon wardrobe";return false;}
-    }
-    if(!owned) {
-        primaryPath=std::string(dataRoot())+"catalog/community.v1";
-        errno=0;FILE* probe=std::fopen(primaryPath.c_str(),"rb");
-        if(probe)std::fclose(probe);
-        else if(errno==ENOENT)primaryPath="app0:/content/avatar/catalog/community.v1";
-        else {error="Could not read the community wardrobe";return false;}
-    }
-    std::vector<std::string> catalogs={primaryPath,std::string(dataRoot())+"catalog/"+(community?"testing.v1":"index.v1")};
-    if(DIR* directory=opendir((std::string(dataRoot())+"catalog").c_str())) {
-        while(const auto* entry=readdir(directory)) {
-            const std::string name=entry->d_name;
-            if(name.compare(0,5,"user-")==0 && name.size()>8 && name.substr(name.size()-3)==".v1")
-                catalogs.push_back(std::string(dataRoot())+"catalog/"+name);
-            if(catalogs.size()>=36)break;
-        }closedir(directory);
-    }
-    std::sort(catalogs.begin(),catalogs.end());catalogs.erase(std::unique(catalogs.begin(),catalogs.end()),catalogs.end());
-    std::vector<std::pair<std::string,std::string>> inputs;
-    size_t retainedBytes=0;
-    std::vector<std::pair<std::string,std::string>> fingerprints;
-    const bool verifyOnly=cachedInputs&&snapshot;
-    const auto consume=[&](const std::string& bytes) {
-        Catalog next;if(!parseCatalog(bytes,next,error))return false;
-        return mergeCatalog(combined,next,error);
-    };
-    for(const auto& path:catalogs) {
-        std::string identity;
-        if(verifyOnly&&vitaRuntimePackIdentity(path.c_str(),identity)) {
-            const auto previous=std::find_if(cachedInputs->begin(),cachedInputs->end(),[&](const auto& entry){return entry.first==path;});
-            if(previous!=cachedInputs->end()&&previous->second.compare(0,identity.size()+1,identity+"|")==0) {
-                fingerprints.push_back(*previous);inputs.emplace_back(path,std::string());continue;
-            }
-        }
-        std::string bytes;bool missing=false;
-        if(!readBounded(path,kMaxCatalogBytes,bytes,true,&missing)){error="Could not read the wardrobe index";return false;}
-        if(missing){if(owned&&path==primaryPath){error="The Bloxicon wardrobe changed during loading";return false;}continue;}
-        const auto digest=sha256(bytes);if(digest.empty()){error="Could not verify the wardrobe index";return false;}
-        if(identity.empty())vitaRuntimePackIdentity(path.c_str(),identity);
-        fingerprints.emplace_back(path,identity.empty()?digest:identity+"|"+digest);
-        // Cold load: validate/merge now, then release this source before the next
-        // file. Never retain a wardrobe-sized collection of encoded documents.
-        if(!verifyOnly&&!consume(bytes))return false;
-        // Preserve a one-read changed refresh for ordinary catalogues, with a
-        // fixed encoded-byte budget rather than retaining every source index.
-        if(verifyOnly&&bytes.size()<=kMaxCatalogBytes-retainedBytes) {
-            retainedBytes+=bytes.size();inputs.emplace_back(path,std::move(bytes));
-        } else inputs.emplace_back(path,std::string());
-    }
-    if(verifyOnly&&*cachedInputs==fingerprints) {
-        community=community||std::any_of(snapshot->items.begin(),snapshot->items.end(),[](const auto& entry){return entry.second.tested=="testing";});
-        error.clear();return true;
-    }
-    if(verifyOnly)for(size_t i=0;i<inputs.size();++i) {
-        std::string reread;
-        const std::string* bytes=&inputs[i].second;
-        if(bytes->empty()) {
-            if(!readBounded(inputs[i].first,kMaxCatalogBytes,reread)){error="Could not read the wardrobe index";return false;}
-            // Uncached loose files must still match this transaction's digest.
-            std::string identity;
-            if(!vitaRuntimePackIdentity(inputs[i].first.c_str(),identity)) {
-                if(sha256(reread)!=fingerprints[i].second){error="Wardrobe index changed during loading";return false;}
-            } else if(fingerprints[i].second.compare(0,identity.size()+1,identity+"|")!=0) {
-                error="Wardrobe index changed during loading";return false;
-            }
-            bytes=&reread;
-        }
-        if(!consume(*bytes))return false;
-        // Keep encoded and decoded copies from overlapping for later sources.
-        std::string().swap(inputs[i].second);
-    }
-    community=community || std::any_of(combined.items.begin(),combined.items.end(),[](const auto& entry){return entry.second.tested=="testing";});
-    snapshot=std::make_shared<Catalog>(std::move(combined));
-    if(cachedInputs)*cachedInputs=std::move(fingerprints);
-    error.clear();return true;
+    return serverCatalogue().read(snapshot,error);
 }
 inline bool scheduleAvatarWork(std::function<void()> work)
 {
@@ -192,7 +107,6 @@ class NativeEditor : public EditorBackend
     boost::shared_ptr<RBX::Graphics::Renderbuffer> depth_;
     boost::shared_ptr<RBX::Graphics::Framebuffer> framebuffer_;
     std::shared_ptr<const Catalog> catalog_;
-    std::vector<std::pair<std::string,std::string>> cachedCatalogInputs_;
     Profile profile_;
     EditQueue edits_;
     ProfileStorage storage_;
@@ -206,7 +120,7 @@ class NativeEditor : public EditorBackend
     bool outfitSaving_=false;
     unsigned pendingOutfitSlot_=0;
     static std::string outfitPath(unsigned slot) {
-        return "ux0:/data/RBXV00001/system/avatar/outfit-"+std::to_string(slot+1)+".v1";
+        return "ux0:/data/Bloxicon/system/avatar/outfit-"+std::to_string(slot+1)+".v1";
     }
     std::string expected_, status_, exitMessage_;
     Feedback feedback_=Feedback::Ready;
@@ -368,8 +282,7 @@ public:
     bool open(const Profile& legacy) override
     {
         if(dataModel_) return true;
-        const bool nextTesting=VitaBrowser::fileExists(testingMarker());
-        testing_=nextTesting;diagnostics_=diagnosticSetting_&&diagnosticSetting_();
+        testing_=false;diagnostics_=diagnosticSetting_&&diagnosticSetting_();
         status_.clear(); exitMessage_.clear(); feedback_=Feedback::Ready; readOnly_=false; frame_=0; boundsRefresh_=4;
         previewFailed_=false;
         history_.clear();outfitSaving_=false;
@@ -391,7 +304,7 @@ public:
         auto phase=[&](const char* label){if(diagnostics_)std::fprintf(stderr,"Vita Avatar open phase %s elapsed_ms %.2f\n",label,double(sceKernelGetSystemTimeWide()-openStart)/1000.0);};
         try
         {
-            if(!loadInstalledWardrobe(testing_,catalog_,status_,&cachedCatalogInputs_)) throw std::runtime_error(status_);
+            if(!loadServerWardrobe(catalog_,status_))return false;
             phase("wardrobe");
             // Recover only the existing atomic-rename interruption; do not replace corrupt/future data.
             VitaBrowser::recoverAtomicTarget(profilePath());
@@ -508,7 +421,7 @@ public:
     bool request(const Profile& profile) override
     {
         if(!dataModel_ || !validProfile(profile)) return false;
-        if(!VitaAccount::connector().editable()){status_="Loading your saved account outfit. Please wait.";return false;}
+        if(!VitaAccount::connector().editable()){status_=VitaAccount::connector().message();return false;}
         if(previewFailed_){status_="Preview interrupted. Reopen Avatar to retry. Your saved outfit is retained.";feedback_=Feedback::Error;return false;}
         if(readOnly_) { status_="Saved avatar needs recovery; no changes were written."; feedback_=Feedback::Error; return false; }
         if(profile==profile_ && !edits_.busy()) return true;
@@ -577,7 +490,18 @@ public:
         }
     }
     void tickCatalogue() override { serverCatalogue().tick(); }
-    bool usesServerCatalogue() const override { return VitaBrowser::serverCataloguesEnabled(); }
+    bool updateCatalogue() override
+    {
+        serverCatalogue().tick();
+        auto next=serverCatalogue().current();
+        static const auto empty=std::make_shared<const Catalog>();
+        if(!next)next=empty;
+        if(next==catalog_)return false;
+        catalog_=std::move(next);
+        return true;
+    }
+    bool cataloguePending() const override { return serverCatalogue().pending(); }
+    bool usesServerCatalogue() const override { return true; }
     std::string assetPath(const std::string& relative) const override
     {
         if(!safePath(relative))return {};
@@ -593,7 +517,8 @@ public:
         CatalogueSession session;
         session.acquire();
         return [session,blob=found->second](std::string& bytes,const std::atomic<bool>& cancel) {
-            return blob.bytes<=2*1024*1024 && fetchCatalogueBlob(session,blob,bytes,cancel);
+            return !cancel.load() && blob.bytes<=2*1024*1024 &&
+                (verifyBlob(dataRoot(),blob,&bytes) || fetchCatalogueBlob(session,blob,bytes,cancel));
         };
     }
     unsigned render(float dt, float orbit, float zoom, bool resetCamera) override
@@ -759,8 +684,8 @@ public:
             parseProfile(bytes,saved_,error)!=ProfileRead::Valid) return;
         configured_=true;
         if(!saved_.enabled) return;
-        testing_=VitaBrowser::fileExists(testingMarker());
-        if(!loadInstalledWardrobe(testing_,catalog_,error))
+
+        if(!loadServerWardrobe(catalog_,error))
         {
             fallbackColors_=saved_.customColors;
             configured_=fallbackColors_;
@@ -781,8 +706,8 @@ public:
         if(parseProfile(bytes,candidate,error)!=ProfileRead::Valid)return false;
         if(candidate==saved_ && (enabled_||!candidate.enabled))return true;
         if(candidate.enabled&&!catalog_){
-            testing_=VitaBrowser::fileExists(testingMarker());
-            if(!loadInstalledWardrobe(testing_,catalog_,error))return false;
+
+            if(!loadServerWardrobe(catalog_,error))return false;
         }
         if(!VitaAccount::write(profilePath(),encodeProfile(candidate)))return false;
         saved_=std::move(candidate);configured_=enabled_=true;fallbackColors_=false;

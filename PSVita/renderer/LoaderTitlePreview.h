@@ -10,7 +10,7 @@ inline bool scheduleTitleSearchTask(std::function<void()> work) {
 inline DetailsTaskResult requestTitlePreview(const TitleSearch::Candidate& choice,const std::atomic<bool>& cancelled,bool networkAllowed=true) {
     DetailsTaskResult result;
     if(choice.universeId<=0||cancelled.load())return result;
-    const auto target="ux0:/data/RBXV00001/system/thumbnails/title-preview-"+std::to_string(choice.universeId)+".png";
+    const auto target="ux0:/data/Bloxicon/system/thumbnails/title-preview-"+std::to_string(choice.universeId)+".png";
     if(validCachedPng(target)){result.media.thumbnailPath=target;return result;}
     if(!networkAllowed){result.media.error="Picture downloads disabled";return result;}
     result.publication=std::make_shared<DetailsPublication>();

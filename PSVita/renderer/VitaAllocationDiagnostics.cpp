@@ -26,7 +26,7 @@ static void recordFailure(const char* allocator, size_t bytes, void* caller)
         allocator, unsigned(bytes), unsigned(reinterpret_cast<uintptr_t>(caller)),
         unsigned(sceKernelGetThreadId()), unsigned(memory.uordblks),
         unsigned(memory.fordblks), unsigned(memory.arena));
-    const SceUID file = sceIoOpen("ux0:/data/RBXV00001/system/allocation-failures.log",
+    const SceUID file = sceIoOpen("ux0:/data/Bloxicon/system/allocation-failures.log",
         SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
     if (file >= 0) {
         if (count > 0 && count < int(sizeof(line))) sceIoWrite(file, line, count);

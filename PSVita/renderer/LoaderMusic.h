@@ -104,7 +104,7 @@ public:
         if(owner && !attempted) {
             generation=vitaAudioGeneration();
             attempted=true;
-            const char* paths[]={"ux0:/data/RBXV00001/assets/menu-music.mp3","ux0:/data/RBXV00001/content/music/menu.mp3","app0:/content/music/menu.mp3"};
+            const char* paths[]={"ux0:/data/Bloxicon/assets/menu-music.mp3","ux0:/data/Bloxicon/content/music/menu.mp3","app0:/content/music/menu.mp3"};
             for(const auto path:paths)
                 if(loadTrack(path))break;
             if(!sound)std::fprintf(stderr,"Vita menu music unavailable: no readable supported track\n");

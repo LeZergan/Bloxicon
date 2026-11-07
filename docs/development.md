@@ -6,8 +6,38 @@
 | `App`, `Base`, `Network`, `Rendering` | New shared source used by the Vita client |
 | `patches/engine.patch` | Changes to existing engine files at baseline commit `e0cfac59f` |
 
-On an authorized baseline checkout, apply the engine patch with `git apply --unidiff-zero patches/engine.patch` and overlay the source directories. A Vita build requires VitaSDK and the project's third-party build dependencies. The small LiveArea and boot branding assets are included for packaging. The runtime pack, places and third-party game assets are supplied separately.
+Use a separate authorized engine checkout at baseline commit `e0cfac59f`.
+Validate the engine patch before applying it:
+
+```sh
+python tools/apply-engine-patch.py --engine-dir /path/to/engine
+python tools/apply-engine-patch.py --engine-dir /path/to/engine --apply
+```
+
+The helper requires unchanged baseline target files. It prepares the patch in a
+temporary directory, clears two legacy telemetry declarations, validates the
+complete patch, and writes engine changes only with `--apply`. Removed baseline
+credential values are never stored in this repository or printed. Apply this
+patch through the helper rather than invoking `git apply` directly.
+
+Overlay this repository's `App`, `Base`, `Network`, `Rendering` and `PSVita`
+directories onto that separate checkout. A Vita build requires VitaSDK and the
+project's third-party build dependencies. The small LiveArea and boot branding
+assets are included for packaging. Runtime packs, places and third-party game
+assets are supplied separately. Never replace an original place with an export.
 
 Copy `PSVita/assets/site.example.json` to `PSVita/assets/site.json` and configure your own HTTPS account service for a connected build. Without a local site file, packaging uses the example with a placeholder origin.
 
-Run `python tools/check-publication.py` against a source export. Review commit authorship and existing history separately before a public release.
+The optional pinned-host DNS fallback in
+`App/include/util/VitaOfficialEndpoint.h` is disabled in this source export.
+Configure the trusted artwork origin in `App/include/util/BloxiconPolicy.h`
+when supplying your own account service. Keep authenticated admission, TLS
+verification and network policy enabled.
+
+Run `python tools/check-publication.py --history` and Gitleaks against both
+the source tree and all reachable history before pushing. The Gitleaks config
+allows only two reviewed Zstandard SIMD expressions that contain no credentials.
+Commit metadata uses a project identity. The checks never print matched values.
+
+Bloxicon code and modifications are GPL-3.0-only. Preserve all third-party
+notices listed in the repository root.

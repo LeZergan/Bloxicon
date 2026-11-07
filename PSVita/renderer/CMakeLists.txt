@@ -52,6 +52,10 @@ target_compile_definitions(roblox_freetype_vita PRIVATE FT2_BUILD_LIBRARY)
 target_compile_options(roblox_freetype_vita PRIVATE -O2 -ffunction-sections -fdata-sections)
 
 add_executable(roblox2016_vita_scene main.cpp VitaAdhocSession.cpp GpuSceneProbe.cpp "${RBX_ROOT}/PSVita/compat/SoLoudVitaOutput.cpp")
+if(NOT VITASDK_DEBUGSCREEN_DIR)
+    set(VITASDK_DEBUGSCREEN_DIR "${VITASDK}/share/gcc-arm-vita-eabi/samples/common")
+endif()
+target_sources(roblox2016_vita_scene PRIVATE "${VITASDK_DEBUGSCREEN_DIR}/debugScreen.c")
 target_sources(roblox2016_vita_scene PRIVATE VitaAllocationDiagnostics.cpp)
 target_sources(roblox2016_vita_scene PRIVATE VitaImmediatePool.cpp)
 target_link_options(roblox2016_vita_scene PRIVATE

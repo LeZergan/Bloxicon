@@ -14,6 +14,7 @@
 #include <cstdio>
 
 namespace RBX { namespace Network { namespace OnlineTls {
+inline constexpr char gameProtocol[]="bloxicon-game/1";
 inline bool pending(int result) {
     if(result==MBEDTLS_ERR_SSL_WANT_READ || result==MBEDTLS_ERR_SSL_WANT_WRITE)return true;
 #ifdef MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET
@@ -31,33 +32,76 @@ inline bool pending(int result) {
 }
 struct Config {
     mbedtls_ssl_config config;
+    mbedtls_ssl_config standardPort;
     mbedtls_x509_crt certificates;
     Config() {
-        mbedtls_ssl_config_init(&config);mbedtls_x509_crt_init(&certificates);
+        mbedtls_ssl_config_init(&config);mbedtls_ssl_config_init(&standardPort);mbedtls_x509_crt_init(&certificates);
     }
-    ~Config(){mbedtls_ssl_config_free(&config);mbedtls_x509_crt_free(&certificates);}
-    void initialize(const char* ca) {
-        if(mbedtls_x509_crt_parse_file(&certificates,ca)!=0 ||
-           mbedtls_ssl_config_defaults(&config,MBEDTLS_SSL_IS_CLIENT,MBEDTLS_SSL_TRANSPORT_STREAM,MBEDTLS_SSL_PRESET_DEFAULT)!=0)
+    ~Config(){mbedtls_ssl_config_free(&standardPort);mbedtls_ssl_config_free(&config);mbedtls_x509_crt_free(&certificates);}
+    void configure(mbedtls_ssl_config& target) {
+        if(mbedtls_ssl_config_defaults(&target,MBEDTLS_SSL_IS_CLIENT,MBEDTLS_SSL_TRANSPORT_STREAM,MBEDTLS_SSL_PRESET_DEFAULT)!=0)
             throw std::runtime_error("Online certificate store is unavailable.");
-        mbedtls_ssl_conf_authmode(&config,MBEDTLS_SSL_VERIFY_REQUIRED);
-        mbedtls_ssl_conf_ca_chain(&config,&certificates,nullptr);
-        mbedtls_ssl_conf_min_tls_version(&config,MBEDTLS_SSL_VERSION_TLS1_2);
-        mbedtls_ssl_conf_rng(&config,[](void*,unsigned char* out,size_t count)->int {
+        mbedtls_ssl_conf_authmode(&target,MBEDTLS_SSL_VERIFY_REQUIRED);
+        mbedtls_ssl_conf_ca_chain(&target,&certificates,nullptr);
+        mbedtls_ssl_conf_min_tls_version(&target,MBEDTLS_SSL_VERSION_TLS1_2);
+        mbedtls_ssl_conf_rng(&target,[](void*,unsigned char* out,size_t count)->int {
             return count<=16384 && RAND_bytes(out,int(count))==1 ? 0 : MBEDTLS_ERR_SSL_INTERNAL_ERROR;
         },nullptr);
     }
+    void initialize(const char* ca) {
+        if(mbedtls_x509_crt_parse_file(&certificates,ca)!=0)
+            throw std::runtime_error("Online certificate store is unavailable.");
+        configure(config);
+        configure(standardPort);
+        static const char* protocols[]={gameProtocol,nullptr};
+        if(mbedtls_ssl_conf_alpn_protocols(&standardPort,protocols)!=0)
+            throw std::runtime_error("Could not configure the game TLS protocol.");
+    }
 };
-class Stream {
-    std::shared_ptr<Config> config;
-    mbedtls_ssl_context ssl;
-    int socket;
+class AdmissionStream {
     std::string hello;
     unsigned char reply[5]{};
     size_t sent=0,received=0;
+    bool transportReady=false,accepted=false;
+    virtual bool progressTransport()=0;
+protected:
+    explicit AdmissionStream(const std::string& bearer):hello("RBXA\1"+bearer){}
+public:
+    virtual ~AdmissionStream(){std::fill(hello.begin(),hello.end(),0);}
+    virtual int write(const void* data,unsigned size)=0;
+    virtual int read(void* data,unsigned size)=0;
+    bool failed=false;
+    bool readyForAdmission() const {return transportReady;}
+    bool admitted() const {return accepted;}
+    bool progress() {
+        if(failed)return false;
+        if(!transportReady){
+            if(!progressTransport())return false;
+            transportReady=true;
+        }
+        if(sent<hello.size()){
+            const int n=write(hello.data()+sent,unsigned(hello.size()-sent));
+            if(n<=0){if(!pending(n))failed=true;return false;}
+            sent+=size_t(n);if(sent<hello.size())return false;
+        }
+        if(!accepted){
+            const int n=read(reply+received,unsigned(sizeof(reply)-received));
+            if(n<=0){if(!pending(n))failed=true;return false;}
+            received+=size_t(n);if(received<sizeof(reply))return false;
+            if(std::memcmp(reply,"RBXO\1",5)!=0){failed=true;return false;}
+            std::fill(hello.begin(),hello.end(),0);hello.clear();accepted=true;
+        }
+        return true;
+    }
+};
+
+class Stream final:public AdmissionStream {
+    std::shared_ptr<Config> config;
+    mbedtls_ssl_context ssl;
+    int socket;
     unsigned pendingWrite=0;
     std::array<unsigned char,16384> pendingBytes;
-    bool handshake=false,accepted=false;
+    bool requireProtocol;
     static bool again(int result) {
         const int code=result==-1?*sceNetErrnoLoc():result;
         // Sony's native sockets return the full negative 0x804101xx value;
@@ -75,11 +119,11 @@ class Stream {
             static_cast<unsigned long>(mbedtls_ssl_get_verify_result(&ssl)));
     }
 public:
-    bool failed=false;
-    Stream(std::shared_ptr<Config> value,int fd,const std::string& host,const std::string& bearer)
-        :config(std::move(value)),socket(fd),hello("RBXA\1"+bearer) {
+    Stream(std::shared_ptr<Config> value,int fd,const std::string& host,const std::string& bearer,bool standardPort=false)
+        :AdmissionStream(bearer),config(std::move(value)),socket(fd),requireProtocol(standardPort) {
         mbedtls_ssl_init(&ssl);
-        if(mbedtls_ssl_setup(&ssl,&config->config)!=0 || mbedtls_ssl_set_hostname(&ssl,host.c_str())!=0){failed=true;return;}
+        const auto& settings=standardPort?config->standardPort:config->config;
+        if(mbedtls_ssl_setup(&ssl,&settings)!=0 || mbedtls_ssl_set_hostname(&ssl,host.c_str())!=0){failed=true;return;}
         mbedtls_ssl_set_bio(&ssl,this,
             [](void* context,const unsigned char* bytes,size_t count)->int {
                 auto* self=static_cast<Stream*>(context);
@@ -91,37 +135,27 @@ public:
                 return n>=0?n:again(n)?MBEDTLS_ERR_SSL_WANT_READ:MBEDTLS_ERR_SSL_INTERNAL_ERROR;
             },nullptr);
     }
-    ~Stream(){std::fill(hello.begin(),hello.end(),0);mbedtls_ssl_free(&ssl);}
-    bool progress() {
-        if(failed)return false;
-        if(!handshake){
-            const int n=mbedtls_ssl_handshake(&ssl);
-            if(n!=0){if(!pending(n))failure("handshake",n);return false;}
-            if(mbedtls_ssl_get_verify_result(&ssl)!=0){failure("certificate",0);return false;}
-            handshake=true;
-        }
-        if(sent<hello.size()){
-            const int n=mbedtls_ssl_write(&ssl,reinterpret_cast<const unsigned char*>(hello.data())+sent,hello.size()-sent);
-            if(n<=0){if(!pending(n))failure("admission-write",n);return false;}
-            sent+=size_t(n);if(sent<hello.size())return false;
-        }
-        if(!accepted){
-            const int n=mbedtls_ssl_read(&ssl,reply+received,sizeof(reply)-received);
-            if(n<=0){if(!pending(n))failure("admission-read",n);return false;}
-            received+=size_t(n);if(received<sizeof(reply))return false;
-            if(std::memcmp(reply,"RBXO\1",5)!=0){failed=true;return false;}
-            std::fill(hello.begin(),hello.end(),0);hello.clear();accepted=true;
+    ~Stream() override {mbedtls_ssl_free(&ssl);}
+private:
+    bool progressTransport() override {
+        const int n=mbedtls_ssl_handshake(&ssl);
+        if(n!=0){if(!pending(n))failure("handshake",n);return false;}
+        if(mbedtls_ssl_get_verify_result(&ssl)!=0){failure("certificate",0);return false;}
+        if(requireProtocol){
+            const auto* protocol=mbedtls_ssl_get_alpn_protocol(&ssl);
+            if(!protocol||std::strcmp(protocol,gameProtocol)!=0){failure("game protocol",0);return false;}
         }
         return true;
     }
-    int write(const void* data,unsigned size){
+    int write(const void* data,unsigned size) override {
         // The tunnel may compact its queue between pumps. Keep the exact write
         // buffer and length stable across mbedTLS WANT_READ/WRITE retries.
         if(!pendingWrite){pendingWrite=std::min(size,16384u);std::memcpy(pendingBytes.data(),data,pendingWrite);}
         const int result=mbedtls_ssl_write(&ssl,pendingBytes.data(),pendingWrite);
+        if(result>0)std::fill_n(pendingBytes.data(),pendingWrite,0);
         if(result>0 || !pending(result))pendingWrite=0;
         return result;
     }
-    int read(void* data,unsigned size){return mbedtls_ssl_read(&ssl,static_cast<unsigned char*>(data),size);}
+    int read(void* data,unsigned size) override {return mbedtls_ssl_read(&ssl,static_cast<unsigned char*>(data),size);}
 };
 } } }

@@ -67,14 +67,11 @@ struct Model
     size_t featured() const { return recent.empty() ? noPlace : recent.front(); }
     std::vector<size_t> shelf(bool showFavorites) const
     {
-        if (showFavorites) return favorites;
-        return recent.empty() ? std::vector<size_t>() : std::vector<size_t>(recent.begin() + 1, recent.end());
+        return showFavorites ? favorites : recent;
     }
 };
 
-// Existing persistence uses case-insensitive names, not place IDs. Use the same
-// first local match (user data precedes package maps), ignore removed files and
-// deduplicate records. Never fabricate history from the last highlighted game.
+// Older records use case-insensitive titles. New play history uses installed paths.
 template<class Place>
 std::vector<size_t> resolveNames(const std::vector<Place>& local, const std::vector<std::string>& names)
 {
@@ -82,9 +79,10 @@ std::vector<size_t> resolveNames(const std::vector<Place>& local, const std::vec
     for (const std::string& name : names)
     {
         const std::string key = nameKey(name);
+        const bool path = name.compare(0,5,"ux0:/")==0 || name.compare(0,6,"app0:/")==0;
         for (size_t index = 0; index < local.size(); ++index)
         {
-            if (!local[index].path.empty() && nameKey(local[index].name) == key)
+            if (!local[index].path.empty() && (path ? local[index].path == name : nameKey(local[index].name) == key))
             {
                 if (std::find(resolved.begin(), resolved.end(), index) == resolved.end())
                     resolved.push_back(index);

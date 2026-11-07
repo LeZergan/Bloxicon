@@ -27,9 +27,9 @@ std::string vitaProgramCachePath(unsigned vertex, unsigned fragment)
 {
     const std::string key = std::string(RBX_VITAGL_CACHE_ABI) + ":v1:" +
         vitaShaderKeys.at(vertex) + ":" + vitaShaderKeys.at(fragment);
-    sceIoMkdir("ux0:/data/RBXV00001", 0777);
-    sceIoMkdir("ux0:/data/RBXV00001/system/programs", 0777);
-    return "ux0:/data/RBXV00001/system/programs/" + vitaDigest(key.data(), key.size()) + ".bin";
+    sceIoMkdir("ux0:/data/Bloxicon", 0777);
+    sceIoMkdir("ux0:/data/Bloxicon/system/programs", 0777);
+    return "ux0:/data/Bloxicon/system/programs/" + vitaDigest(key.data(), key.size()) + ".bin";
 }
 
 bool vitaLoadProgram(unsigned program, const std::string& path)

@@ -10,7 +10,7 @@ struct BadgeMedia {
     std::shared_ptr<DetailsPublication> publication;
 };
 inline std::string badgeCache(int id, const char* extension) {
-    return "ux0:/data/RBXV00001/system/badges/" + std::to_string(id) + extension;
+    return "ux0:/data/Bloxicon/system/badges/" + std::to_string(id) + extension;
 }
 inline bool parseBadgeMetadata(const std::string& json, int id, BadgeMedia& result) {
     rapidjson::Document document; std::string error;

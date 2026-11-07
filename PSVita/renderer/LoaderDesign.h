@@ -54,6 +54,13 @@ inline void theme(bool dark, bool circle, bool bloxicon=false) {
     positive=dark?0x75d5a8:0x006e41;warning=dark?0xffbd72:0xa65300;danger=dark?0xff938e:0xb91e17;
 }
 constexpr float focusWidth = 3, buttonHeight = 48;
+inline unsigned focusGlowAlpha(uint64_t timeUs)
+{
+    constexpr uint64_t period=2800000;
+    const auto phase=timeUs%period;
+    const float t=float(std::min(phase,period-phase))/float(period/2);
+    return 10+unsigned(19.f*t*t*(3.f-2.f*t));
+}
 constexpr float cornerRadius = 6;
 constexpr float controlRadius = 4, imageRadius = 6;
 inline float surfaceRadius(float radius) {

@@ -19,7 +19,8 @@ public:
         bool ready() const { return phase == Ready; }
     };
 
-    explicit NetworkJoinState(uint64_t now) : phase(Connecting), phaseStart(now) {}
+    explicit NetworkJoinState(uint64_t now, uint64_t connectBudget = 20000000ULL)
+        : phase(Connecting), phaseStart(now), connectBudget(connectBudget) {}
 
     bool accepted(uint64_t now)
     {
@@ -55,7 +56,7 @@ public:
     Snapshot check(uint64_t now)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        const uint64_t budget = phase == Connecting ? 20000000ULL :
+        const uint64_t budget = phase == Connecting ? connectBudget :
             phase == ReceivingGlobals ? 45000000ULL : 120000000ULL;
         if (phase != Ready && phase != Failed && now >= phaseStart && now - phaseStart >= budget)
         {
@@ -79,6 +80,7 @@ private:
     std::mutex mutex;
     Phase phase;
     uint64_t phaseStart;
+    const uint64_t connectBudget;
     std::string error;
 };
 }

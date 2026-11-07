@@ -30,9 +30,8 @@ namespace VitaAvatar {
 #if defined(RBX_HEADLESS_SERVER)
 inline const char* dataRoot() { return "content/avatar/"; }
 #else
-inline const char* dataRoot() { return "ux0:/data/RBXV00001/content/avatar/"; }
+inline const char* dataRoot() { return "ux0:/data/Bloxicon/content/avatar/"; }
 #endif
-inline const char* testingMarker() { return "ux0:/data/RBXV00001/system/avatar-testing.enabled"; }
 
 inline std::string sha256(const std::string& data)
 {
@@ -61,9 +60,9 @@ inline bool verifyBlob(const std::string& root, const Blob& blob, std::string* c
     if (!safePath(blob.path) || !sha256Text(blob.sha256) || blob.bytes == 0 || blob.bytes > kMaxBlobBytes) return false;
     std::string bytes;
     bool read=readBounded(root+blob.path,static_cast<size_t>(blob.bytes),bytes);
-    if(!read && root=="ux0:/data/RBXV00001/content/avatar/")
+    if(!read && root=="ux0:/data/Bloxicon/content/avatar/")
         read=readBounded("app0:/content/avatar/"+blob.path,static_cast<size_t>(blob.bytes),bytes);
-    if(!read && root=="ux0:/data/RBXV00001/assets/")
+    if(!read && root=="ux0:/data/Bloxicon/assets/")
         read=readBounded("app0:/content/avatar/aliases/"+blob.path,static_cast<size_t>(blob.bytes),bytes);
     if (!read || bytes.size()!=blob.bytes || sha256(bytes)!=blob.sha256) return false;
     if (content) content->swap(bytes);
@@ -129,7 +128,7 @@ inline VerifiedOutfit verifyOutfit(const Catalog& catalog, const Profile& profil
                     if (!verifyBlob(root,entry->second,&content))
 #else
                     Blob alias=entry->second; alias.path=path.substr(8);
-                    if (!verifyBlob("ux0:/data/RBXV00001/assets/",alias,&content))
+                    if (!verifyBlob("ux0:/data/Bloxicon/assets/",alias,&content))
 #endif
                     { result.error="This body package has not been installed completely"; return result; }
                 }

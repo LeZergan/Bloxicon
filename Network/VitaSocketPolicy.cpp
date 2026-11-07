@@ -22,7 +22,7 @@
 #include <unistd.h>
 #include <psp2/net/net.h>
 #include <psp2/kernel/threadmgr.h>
-#include "network/VitaOnlineTls.h"
+#include "network/VitaOnlineWebSocket.h"
 
 namespace RBX {
 namespace Network {
@@ -51,15 +51,21 @@ struct OfflineTraceBudget
 };
 // END OFFLINE TRACE FILTER.
 #endif
+enum class AccountIngress { GameTls, WebSocket, Dedicated };
 struct TunnelChannel
 {
     int owner, socket;
     SceNetSockaddrIn endpoint;
     uint64_t deadline;
+    uint64_t routeDeadline = 0;
+    unsigned short legacyPort = 0;
+    std::array<AccountIngress,3> routes{{AccountIngress::GameTls,AccountIngress::WebSocket,AccountIngress::Dedicated}};
+    unsigned nextRoute = 0;
+    bool routeVerified = false;
     bool live = false, failed = false, connecting = true;
     size_t receiveCursor = 0;
     bool udpFirst = true;
-    std::unique_ptr<OnlineTls::Stream> secure;
+    std::unique_ptr<OnlineTls::AdmissionStream> secure;
     std::array<unsigned char, 32768> output;
     std::array<unsigned char, 4096> input;
     size_t sent = 0, queued = 0, received = 0;
@@ -84,6 +90,15 @@ std::string onlineHost,onlineAccess;
 unsigned short onlinePort=31901;
 uint64_t onlineUntil=0;
 std::array<unsigned int,9> accountRoutes{};
+unsigned int preferredAddress=0;
+AccountIngress preferredIngress=AccountIngress::GameTls;
+uint64_t preferredUntil=0;
+
+const char* gameCaBundle() {
+    const char* ca="ux0:/data/Bloxicon/system/certs/cacert.pem";
+    if(FILE* file=std::fopen(ca,"rb")){std::fclose(file);return ca;}
+    return "app0:/certs/cacert.pem";
+}
 
 bool requiresTcp(unsigned int address)
 {
@@ -172,13 +187,77 @@ void traceOffline(TunnelChannel& channel, bool outbound, const void* data, unsig
 }
 #endif
 
+bool connectTunnel(TunnelChannel& channel,unsigned short port,bool accountRoute,bool standardPort=false)
+{
+    channel.secure.reset();
+    if(channel.socket>=0)sceNetSocketClose(channel.socket);
+    channel.socket=sceNetSocket("Bloxicon TCP tunnel",SCE_NET_AF_INET,SCE_NET_SOCK_STREAM,SCE_NET_IPPROTO_TCP);
+    if(channel.socket<0)return false;
+    const int enabled=1;
+    if(sceNetSetsockopt(channel.socket,SCE_NET_SOL_SOCKET,SCE_NET_SO_NBIO,&enabled,sizeof(enabled))<0)return false;
+    sceNetSetsockopt(channel.socket,SCE_NET_IPPROTO_TCP,SCE_NET_TCP_NODELAY,&enabled,sizeof(enabled));
+    // Normalize POSIX RakNet addresses before calling Sony's socket API.
+    auto destination=channel.endpoint;
+    destination.sin_len=sizeof(destination);
+    destination.sin_family=SCE_NET_AF_INET;
+    destination.sin_port=sceNetHtons(port);
+    destination.sin_vport=0;
+    const int connected=sceNetConnect(channel.socket,reinterpret_cast<const SceNetSockaddr*>(&destination),sizeof(destination));
+    if(connected<0&&!tunnelWouldBlock(tunnelError(connected)))return false;
+    channel.connecting=connected<0;
+    if(accountRoute)channel.secure.reset(new OnlineTls::Stream(onlineTls,channel.socket,onlineHost,onlineAccess,standardPort));
+    return true;
+}
+
+bool nextAccountIngress(TunnelChannel& channel)
+{
+    if(sceKernelGetSystemTimeWide()>=onlineUntil)return false;
+    while(channel.nextRoute<channel.routes.size()) {
+        const auto route=channel.routes[channel.nextRoute++];
+        uint64_t budget=VitaOnlineTiming::legacyHandshakeUs;
+        bool opened=false;
+        if(route==AccountIngress::WebSocket) {
+            budget=VitaOnlineTiming::webSocketProbeUs;
+            channel.secure.reset();
+            if(channel.socket>=0){sceNetSocketClose(channel.socket);channel.socket=-1;}
+            char address[16]={};
+            if(sceNetInetNtop(SCE_NET_AF_INET,&channel.endpoint.sin_addr,address,sizeof(address))) {
+                channel.secure.reset(new OnlineWebSocket::Stream(onlineHost,address,onlineAccess,gameCaBundle(),long(budget/1000)));
+                opened=!channel.secure->failed;
+            }
+        } else {
+            const bool standard=route==AccountIngress::GameTls;
+            if(standard)budget=VitaOnlineTiming::standardPortProbeUs;
+            opened=connectTunnel(channel,standard?443:channel.legacyPort,true,standard);
+        }
+        if(opened) {
+            channel.routeDeadline=sceKernelGetSystemTimeWide()+budget;
+            return true;
+        }
+    }
+    return false;
+}
+
 void flushTunnel(TunnelChannel& channel)
 {
     if (channel.failed) return;
     if (channel.secure && !channel.secure->progress()) {
+        if(channel.legacyPort&&!channel.secure->readyForAdmission()&&
+            (channel.secure->failed||sceKernelGetSystemTimeWide()>=channel.routeDeadline)) {
+            if(nextAccountIngress(channel))return;
+            failTunnel(channel,"all secure routes",-1,ECONNREFUSED);
+            return;
+        }
         if(channel.secure->failed || sceKernelGetSystemTimeWide()>=channel.deadline)
             failTunnel(channel,"secure admission",-1,ECONNREFUSED);
         return;
+    }
+    if(channel.legacyPort&&!channel.routeVerified) {
+        channel.routeVerified=true;
+        preferredAddress=channel.endpoint.sin_addr.s_addr;
+        preferredIngress=channel.routes[channel.nextRoute-1];
+        preferredUntil=sceKernelGetSystemTimeWide()+600000000ULL;
+        std::fprintf(stderr,"Vita secure game ingress selected: route=%u\n",unsigned(preferredIngress));
     }
     for (unsigned attempt = 0; attempt < 4 && channel.sent < channel.queued; ++attempt)
     {
@@ -210,29 +289,20 @@ TunnelChannel* findTunnel(int owner, const SceNetSockaddrIn& endpoint, bool crea
     if(requiresTcp(endpoint.sin_addr.s_addr) && (!accountRoute || !onlineTls || onlineAccess.empty() ||
         sceKernelGetSystemTimeWide()>=onlineUntil))return NULL;
     std::unique_ptr<TunnelChannel> channel(new TunnelChannel(owner, endpoint));
-    channel->socket = sceNetSocket("Bloxicon TCP fallback", SCE_NET_AF_INET, SCE_NET_SOCK_STREAM, SCE_NET_IPPROTO_TCP);
-    if (channel->socket < 0) return NULL;
-    const int enabled = 1;
-    if (sceNetSetsockopt(channel->socket, SCE_NET_SOL_SOCKET, SCE_NET_SO_NBIO, &enabled, sizeof(enabled)) < 0) return NULL;
-    sceNetSetsockopt(channel->socket, SCE_NET_IPPROTO_TCP, SCE_NET_TCP_NODELAY, &enabled, sizeof(enabled));
-    SceNetSockaddrIn destination = endpoint;
-    // RakNet builds a POSIX address without Sony's sin_len byte. Native TCP
-    // discovery supplies it; gameplay must normalize it at the same boundary.
-    destination.sin_len = sizeof(destination);
-    destination.sin_family = SCE_NET_AF_INET;
     unsigned short ingress=tunnelPort;
     for(const auto& route:tunnelRoutes)if(route.first==endpoint.sin_addr.s_addr) {ingress=route.second;break;}
-    destination.sin_port = sceNetHtons(ingress);
-    destination.sin_vport = 0;
-    const int connected = sceNetConnect(channel->socket, reinterpret_cast<const SceNetSockaddr*>(&destination), sizeof(destination));
-    if (connected < 0)
-    {
-        const int error = tunnelError(connected);
-        if (!tunnelWouldBlock(error)) { failTunnel(*channel, "connect", connected, error); return NULL; }
+    if(accountRoute&&onlineHost=="bloxicon.example.invalid"&&ingress==31901) {
+        channel->legacyPort=ingress;
+        if(preferredAddress==endpoint.sin_addr.s_addr&&sceKernelGetSystemTimeWide()<preferredUntil) {
+            auto preferred=std::find(channel->routes.begin(),channel->routes.end(),preferredIngress);
+            std::rotate(channel->routes.begin(),preferred,preferred+1);
+        }
+        if(!nextAccountIngress(*channel))return NULL;
+    } else if(!connectTunnel(*channel,ingress,accountRoute)) {
+        failTunnel(*channel,"connect",-1,tunnelError(-1));
+        return NULL;
     }
-    else channel->connecting = false;
-    if(accountRoute)channel->secure.reset(new OnlineTls::Stream(onlineTls,channel->socket,onlineHost,onlineAccess));
-    std::fprintf(stderr, "Vita TCP channel opened: owner=%d port=%u connect=%d\n", owner, unsigned(sceNetNtohs(endpoint.sin_port)), connected);
+    std::fprintf(stderr,"Vita TCP channel opened: owner=%d port=%u\n",owner,unsigned(sceNetNtohs(endpoint.sin_port)));
     tunnelChannels.push_back(std::move(channel));
     tunnelCount.store(unsigned(tunnelChannels.size()), std::memory_order_release);
     return tunnelChannels.back().get();
@@ -275,9 +345,7 @@ void vitaPrepareOnlineTransport()
 {
     {std::lock_guard<std::mutex> lock(tunnelMutex);if(onlineTls)return;}
     auto config=std::make_shared<OnlineTls::Config>();
-    const char* ca="ux0:/data/RBXV00001/system/certs/cacert.pem";
-    if(FILE* f=std::fopen(ca,"rb"))std::fclose(f);else ca="app0:/certs/cacert.pem";
-    config->initialize(ca);
+    config->initialize(gameCaBundle());
     std::lock_guard<std::mutex> lock(tunnelMutex);if(!onlineTls)onlineTls=std::move(config);
 }
 void vitaSetOnlineSession(const std::string& host,unsigned short port,const std::string& access,uint64_t until)
@@ -476,10 +544,7 @@ static int receiveSocket(int owner, int socket, bool posix, void* data, unsigned
             const bool complete = bufferedSize && bufferedSize <= maxTunnelPayload && channel.received >= bufferedSize+4;
             if (!complete && channel.received < channel.input.size())
             {
-                if(channel.secure && !channel.secure->progress()){
-                    if(channel.secure->failed)failTunnel(channel,"TLS admission",-1,ECONNREFUSED);
-                    continue;
-                }
+                if(channel.secure && !channel.secure->admitted())continue;
                 const int count = channel.secure ? channel.secure->read(channel.input.data()+channel.received,unsigned(channel.input.size()-channel.received)) :
                     sceNetRecv(channel.socket, channel.input.data()+channel.received,unsigned(channel.input.size()-channel.received), SCE_NET_MSG_DONTWAIT);
                 if (count > 0) { channel.received += count; channel.connecting = false; }

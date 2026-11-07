@@ -28,26 +28,26 @@ inline const std::array<Row,FieldCount>& rows() {
         {ShoulderMapping,"Physical L / R","Choose the native shoulder button mapping."},
         {RearMapping,"Rear touch","Choose rear touch actions."},
         {CameraSensitivity,"Camera sensitivity","Adjust the native right stick response."},
-        {InvertCamera,"Invert camera Y","Reverse vertical right stick camera input."},
+        {InvertCamera,"Invert camera Y","Reverse vertical camera movement."},
         {StickDeadzone,"Stick deadzone","Reduce unwanted stick drift."},
         {GraphicsPreset,"Graphics preset","Battery, Balanced or Detailed."},
-        {VisualQuality,"Graphics quality","Levels 1-10. Higher detail costs more frame time."},
-        {RenderDistance,"Render distance","Auto follows quality; manual values are in studs."},
+        {VisualQuality,"Graphics quality","Higher levels add detail and cost frame time."},
+        {RenderDistance,"Render distance","Set the draw distance in studs or use Auto."},
         {TextureQuality,"World textures","Choose the world texture resolution."},
         {PostEffects,"Post-processing","Enable game-authored blur and color effects."},
         {VerticalSync,"Vertical sync","Synchronize frames with the display."},
         {FrameCap,"Frame rate limit","Set a 20, 30 or 60 FPS limit."},
         {GameVolume,"Game volume","Set the game audio volume."},
-        {ButtonSounds,"Button sounds","Xbox feedback for loader navigation and buttons."},
+        {ButtonSounds,"Button sounds","Play Xbox sounds for loader controls."},
         {ButtonVolume,"Button volume","Set the button feedback volume."},
         {MenuMusic,"Background music","Play the supplied Xbox menu soundtrack."},
         {MusicVolume,"Music volume","Set soundtrack volume from mute to 100%."},
         {MusicInGame,"Music during gameplay","Keep the soundtrack playing in games as well."},
         {MusicLoop,"Loop soundtrack","Repeat the soundtrack continuously."},
-        {AutomaticAssetRepair,"Host asset downloads","Load missing content from your host or saved cache."},
-        {BackgroundLoading,"Background loading","Content workers: 2 is balanced."},
-        {PrebuildSceneClusters,"Prepare world before play","Build queued geometry before play (up to 60 seconds)."},
-        {ContentPacks,"Content packs","Inspect installed content packs."},
+        {AutomaticAssetRepair,"Host asset downloads","Load missing assets from the host or cache."},
+        {BackgroundLoading,"Background loading","Two workers balance speed and memory."},
+        {PrebuildSceneClusters,"Prepare world before play","Build world geometry for up to 60 seconds."},
+        {ContentPacks,"Avatar packs","Install optional wardrobe assets for offline use."},
         {DiagnosticLogging,"Performance logs","Record additional troubleshooting information."},
         {ExtraLoadingCore,"Extra worker core","Use the extra core when available."},
         {PlaceFixes,"Place assistance","Configure shared loading assistance."}
@@ -77,8 +77,8 @@ inline const char* sectionTitle(size_t i){static const char* names[]={"Your prof
 inline const char* sectionSummary(size_t i){static const char* text[]={"Make this client yours.","A comfortable look for every screen.","Your console. Your controls.","Tune performance. Keep the native display.","Music, game audio and button feedback.","Manage what your games can load.","Extra tools for testing and troubleshooting."};return text[std::min(i,size_t(6))];}
 inline const char* help(Field field){
     switch(field){
-    case PlayerName:return "This name is used by the classic client when joining a place. Open the name editor with the confirm button, enter your name, and save it. Your saved outfit stays available in Avatar. Badge collection and Place data below belong to this local profile.";
-    case BadgeCollection:return "Open your collection to see badges earned by this local profile, with names, descriptions, related games and earned dates. Select a badge to read its details. Back returns to this category. Game previews come from Bloxicon.";
+    case PlayerName:return "Your Bloxicon account supplies your nickname when you are signed in. Sign out to edit the offline nickname used in classic places.";
+    case BadgeCollection:return "See your earned badges and select one to open its details. Badge history syncs with your Bloxicon account when you are signed in.";
     case PlaceDataManager:return "Choose a game to inspect its saved progress or create a verified backup. Start / Manage opens actions for deleting progress, backups, reports, settings, downloaded information, pictures and loading caches. Remove place file deletes the actual installed file while keeping progress. Remove place and all its data also clears its saves and backups. Deletion requires a second confirmation; Circle cancels. In Saved values, Start deletes only the selected value after confirmation. Previously played games with remaining saves are listed even after their place file was removed. Shared runtime and avatar packs stay installed.";
     case DarkMode:return "Choose the palette that feels comfortable on the Vita display. The theme applies to Home, game browsing, game details, Avatar, settings and loader dialogs. Text, backgrounds, artwork edges and focus indicators use the same palette across these screens. Changes are visible as soon as you adjust this option.";
     case BloxiconMode:return "Use the website's red accents for selections, buttons and focus indicators throughout the loader. Dark mode separately controls the background, so Bloxicon mode works with both light and dark screens. Changes apply immediately and are saved for your next visit.";
@@ -95,7 +95,7 @@ inline const char* help(Field field){
     case AutomaticAssetRepair:return "Allow the shared content loader to fetch supported missing classic assets when a game needs them. Existing cached content is reused. An unavailable or denied asset can still fail to load; the recorded load report keeps that failure visible. Original place files are preserved.";
     case BackgroundLoading:return "Choose how many content workers can load supported assets in the background. Two workers is the balanced default. More workers can increase simultaneous loading and memory use; results depend on the place, storage card and network. This setting is applied when a game starts.";
     case PrebuildSceneClusters:return "Prepare queued world geometry before entering gameplay, with a bounded preparation period. This can move some work from early gameplay into the loading screen. The loading screen remains available while work progresses. Choose this per game when its first frames need extra preparation.";
-    case ContentPacks:return "View each pack and its loading status. The built-in loader and personal wardrobe use separate packs. Add a validated user .pac file in the packs folder, then restart the client so its contents can be indexed. Original places, personal settings and saves remain separate from appearance packs.";
+    case ContentPacks:return "The wardrobe downloads items as needed. Install Essential, Additions or the full catalogue to use its items offline. Restart after installing.";
     case DiagnosticLogging:return "Record detailed timing and troubleshooting information while investigating a place. Logging adds work, so keep it off for ordinary play. Load reports and missing-content errors remain useful when diagnosing an incomplete load. Change this option before launching the place you want to inspect.";
     case ExtraLoadingCore:return "Allow supported background work to use the extra worker core. Work is routed through the shared scheduler and retains its bounded queues. The benefit depends on the place and the Vita's other work. This option changes worker scheduling when supported; it is not a clock-speed control.";
     case PlaceFixes:return "Open the shared assistance options for loading prompts, script-error reports and optional content placeholders. The options apply universally rather than changing an original place. Missing scripts and required assets can still prevent gameplay. Each placeholder option explains what its fallback can provide.";
@@ -114,7 +114,8 @@ inline int pageHit(float x,float y,size_t selected){
 inline size_t move(size_t i,int d){return d<0?(i?i-1:0):std::min(i+1,size_t(FieldCount-1));}
 template<class S>std::string value(const S& s,Field f){
     switch(f){
-    case AccountConnection:return "CONNECT / MANAGE";case PlayerName:return playerName(s);case BadgeCollection:return "VIEW BADGES";case PlaceDataManager:return "OPEN";case PlaceFixes:return "CONFIGURE";case ContentPacks:return "VIEW PACKS";
+    case AccountConnection:return playerNameEditable(s)?"Connect account":"Manage account";
+    case PlayerName:return playerName(s);case BadgeCollection:return "View badges";case PlaceDataManager:return "Open";case PlaceFixes:return "Configure";case ContentPacks:return "Manage";
     case DarkMode:return s.darkMode?"ON":"OFF";case FpsDisplay:return s.showFps?"ON":"OFF";
     case BloxiconMode:return s.bloxiconMode?"ON":"OFF";
     case ChatButton:return s.showChatButton?"ON":"OFF";
