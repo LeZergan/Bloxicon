@@ -77,7 +77,9 @@ def main():
     parser.add_argument('--history', action='store_true')
     args = parser.parse_args()
     root = args.root.resolve()
-    identities = {x.casefold() for x in (getpass.getuser(), Path.home().name, *args.identity, *args.forbidden_term) if len(x) >= 3}
+    service_users = {'runner', 'root', 'administrator', 'system', 'default', 'public'}
+    local_names = [x for x in (getpass.getuser(), Path.home().name) if x.casefold() not in service_users]
+    identities = {x.casefold() for x in (*local_names, *args.identity, *args.forbidden_term) if len(x) >= 3}
     issues = []
     count = 0
     for directory, dirs, files in os.walk(root, followlinks=False):
