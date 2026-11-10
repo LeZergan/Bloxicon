@@ -10,7 +10,8 @@ body:
         Modifications, new clients and other projects based on the Bloxicon Vita client need the owner's written permission first. So does any use of the Bloxicon name or branding.
         Rendering code in `Rendering/` is GPL-3.0-only and needs no request, unless you also want to use the Bloxicon name or branding.
         Each request covers one project and one base. Approval for one base does not cover another base, a later version or a different project.
-        Projects that make money are not allowed: no paid currency, cosmetics, items, access or builds, no real-money trading, ads, donations, tips or subscriptions.
+        Projects that make money are not allowed: no paid currency, cosmetics, items, access or builds, no real-money trading and no ads. Voluntary donations are fine if donors get nothing in the game in return.
+        Users' data must be protected and never sold, shared or disclosed.
         The owner will discuss the request with you here. Do not start the work until the owner approves it in this issue.
   - type: dropdown
     id: kind
@@ -56,5 +57,7 @@ body:
           required: true
         - label: If approved, my project will say it is based on Bloxicon and link to this request.
           required: true
-        - label: My project will never make money. It will not sell currency, cosmetics, items, game passes, access or builds, allow real-money trading, or use ads, donations, tips, subscriptions or crowdfunding.
+        - label: My project will not make money except through voluntary donations. It will not sell currency, cosmetics, items, game passes, access or builds, allow real-money trading, show ads, or reward donors in the game.
+          required: true
+        - label: My project will collect only the user data it needs, publish a privacy notice, delete data on request, and never sell, share or disclose users' data except the minimum a law requires.
           required: true

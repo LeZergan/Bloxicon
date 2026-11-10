@@ -32,7 +32,11 @@ release a build or run it as a service, and keep it available. You must also
 say your project is based on Bloxicon and link to your approval. See section 6
 of the license.
 
-Your project must not make money in any way: no paid currency, cosmetics,
-items, game passes, access or builds, no real-money trading, and no ads,
-donations, tips, subscriptions or crowdfunding. Requests for paid projects are
-declined.
+Your project must not make money, except through voluntary donations that
+give donors nothing in the game in return: no paid currency, cosmetics, items,
+game passes, access or builds, no real-money trading and no ads. Requests for
+paid projects are declined.
+
+Your project must protect its users' data: collect only what it needs, publish
+a privacy notice, never sell, share or disclose the data (except the minimum a
+law requires), and delete it when users ask. See section 6 of the license.
