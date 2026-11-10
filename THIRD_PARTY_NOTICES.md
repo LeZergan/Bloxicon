@@ -9,6 +9,7 @@ force; the Bloxicon licenses do not replace them.
 | --- | --- | --- |
 | Luau Ast/Common parser and printer | `PSVita/compat/luau` | MIT; see `LICENSE.txt` and pinned revision in `UPSTREAM.txt` |
 | Zstandard decoder | `PSVita/compat/zstd` | BSD; see `LICENSE` and source notices |
+| SoLoud Vita output backend | `PSVita/compat/SoLoudVitaOutput.cpp` | zlib license; see the notice at the top of the file |
 | minimp3 | `PSVita/compat/thirdparty/minimp3` | CC0/public-domain dedication in the source headers |
 | vitaGL | External VitaSDK dependency | Upstream GPL-3.0 and LGPL-3.0 notices; see upstream `COPYING`, `COPYING.LESSER` and individual source headers |
 
