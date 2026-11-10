@@ -31,3 +31,8 @@ code publicly, free of charge and under the Bloxicon license, every time you
 release a build or run it as a service, and keep it available. You must also
 say your project is based on Bloxicon and link to your approval. See section 6
 of the license.
+
+Your project must not make money in any way: no paid currency, cosmetics,
+items, game passes, access or builds, no real-money trading, and no ads,
+donations, tips, subscriptions or crowdfunding. Requests for paid projects are
+declined.
