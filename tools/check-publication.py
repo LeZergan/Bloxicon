@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: LicenseRef-Bloxicon-Source-Available-1.1
 """Check client-only source and reachable history without printing matched values."""
 import argparse
 import getpass

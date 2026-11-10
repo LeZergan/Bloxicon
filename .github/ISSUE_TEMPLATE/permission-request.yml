@@ -1,0 +1,57 @@
+name: Permission request
+description: Ask to modify the Bloxicon Vita client, build a new client on it, or use the Bloxicon name. One request per base.
+title: "Permission request: "
+labels:
+  - permission-request
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Modifications, new clients and other projects based on the Bloxicon Vita client need the owner's written permission first. So does any use of the Bloxicon name or branding.
+        Rendering code in `Rendering/` is GPL-3.0-only and needs no request, unless you also want to use the Bloxicon name or branding.
+        Each request covers one project and one base. Approval for one base does not cover another base, a later version or a different project.
+        The owner will discuss the request with you here. Do not start the work until the owner approves it in this issue.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What do you want to do?
+      options:
+        - Modify Bloxicon
+        - Build a new client or port based on Bloxicon
+        - Distribute or host builds
+        - Use the Bloxicon name or branding
+        - Connect to official Bloxicon services
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: base
+    attributes:
+      label: Base
+      description: The Bloxicon release, tag or commit, and the part of the client (for example Vita client, loader, controls, network layer, engine patch) you want to build on.
+    validations:
+      required: true
+  - type: input
+    id: project
+    attributes:
+      label: Project name and link
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: What you plan to change or build
+      description: Describe the changes, the target platform, how and where you plan to share it, and where you will publish its source.
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Terms
+      options:
+        - label: I have read the Bloxicon Source-Available License and will not start this work until the owner approves this request.
+          required: true
+        - label: If approved, I will publish my project's complete source code publicly, free of charge and under the Bloxicon license, every time I release a build or run it as a service, and post the link here.
+          required: true
+        - label: If approved, my project will say it is based on Bloxicon and link to this request.
+          required: true

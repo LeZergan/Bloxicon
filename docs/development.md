@@ -47,5 +47,8 @@ unspecified and documentation examples, in files and reachable Git history.
 The double-colon grammar token in the vendored Luau lexer/printer is language
 syntax and is checked separately from network addresses.
 
-Bloxicon code and modifications are GPL-3.0-only. Preserve all third-party
-notices listed in the repository root.
+Rendering code (`Rendering/` and the rendering parts of the engine patch) is
+GPL-3.0-only. The rest of the Vita client is under the Bloxicon Source-Available
+License: modifications and new clients based on it need the owner's written
+permission, requested per base through a permission-request issue.
+Preserve all third-party notices listed in the repository root.

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: LicenseRef-Bloxicon-Source-Available-1.1
 """Validate or apply the client patch without publishing removed baseline secrets."""
 import argparse
 import ipaddress

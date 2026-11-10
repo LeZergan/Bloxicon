@@ -1,7 +1,9 @@
 # Third-party notices
 
-The Bloxicon-authored Vita client and modifications are GPL-3.0-only. Existing
-third-party notices remain in force; the top-level license does not replace them.
+Bloxicon rendering code is GPL-3.0-only (see Rendering/LICENSE). The rest of
+the Bloxicon-authored Vita client and modifications are under the Bloxicon
+Source-Available License (see LICENSE). Existing third-party notices remain in
+force; the Bloxicon licenses do not replace them.
 
 | Component | Location or dependency | Terms |
 | --- | --- | --- |
@@ -11,7 +13,8 @@ third-party notices remain in force; the top-level license does not replace them
 | vitaGL | External VitaSDK dependency | Upstream GPL-3.0 and LGPL-3.0 notices; see upstream `COPYING`, `COPYING.LESSER` and individual source headers |
 
 [vitaGL upstream](https://github.com/Rinnegatamante/vitaGL) supplies its own
-license files. Bloxicon's GPL-3.0-only selection applies to Bloxicon code.
+license files. The Bloxicon license applies to Bloxicon code only and does not
+limit your LGPL rights to modify vitaGL and relink it.
 
 The separately obtained engine baseline and its dependencies retain their own
 notices and terms. Obtain an authorized baseline and retain its notices when

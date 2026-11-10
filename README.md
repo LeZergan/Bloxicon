@@ -35,8 +35,32 @@ an authorized engine baseline and the listed dependencies.
 
 ## License
 
-Bloxicon-authored code and modifications are [GNU GPL version 3 only](LICENSE)
-(`GPL-3.0-only`). Dependencies retain their original licenses and notices; see
+Bloxicon has two parts with different terms:
+
+| Part | License | Reuse |
+| --- | --- | --- |
+| Rendering: `Rendering/` and the rendering parts of `patches/engine.patch` | [GPL-3.0-only](Rendering/LICENSE) | Open under the GPL; changes you distribute must stay GPL |
+| Vita client: everything else, including `PSVita/`, `App/`, `Base/`, `Network/` and branding | [Bloxicon Source-Available License](LICENSE) | Permission required, per base |
+
+You may read the client code, build it for your own use and send fixes back as
+pull requests. Modifications, new clients and any other project based on the
+Vita client need the owner's written permission first, and so does any use of
+the Bloxicon name or branding, including by projects that only reuse the GPL
+rendering code.
+
+Open a [permission request](../../issues/new?template=permission-request.yml)
+for each base you want to build on (a specific Bloxicon release or commit and
+part of the client). Every request is discussed with the owner before a
+decision. Approval for one base does not cover another base, a later version or
+a different project.
+
+Approved projects must publish their complete source code, publicly and free of
+charge, under the same license, every time they release a build or run it as a
+service. They must also say they are based on Bloxicon and link to their
+approval. Unapproved copies, and approved projects that stop publishing their
+source, may be taken down and blocked from official Bloxicon services.
+
+Dependencies retain their original licenses and notices; see
 [third-party notices](THIRD_PARTY_NOTICES.md).
 
 Open a [bug report](../../issues/new?template=bug-report.yml), select `v1`, and describe the issue in your own words.

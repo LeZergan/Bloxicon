@@ -1,11 +1,23 @@
 Bloxicon Vita client
-Copyright (C) 2026 Bloxicon contributors
+Copyright (C) 2026 the Bloxicon project owner
 
-Bloxicon-authored client code, source modifications, build scripts and
-documentation in this repository are licensed under the GNU General Public
-License, version 3 only (SPDX-License-Identifier: GPL-3.0-only).
-See LICENSE for the complete license and warranty disclaimer.
+Rendering: the Rendering/ directory, and the parts of patches/engine.patch
+that change files under Rendering/ or shaders/, are licensed under the GNU
+General Public License, version 3 only (SPDX-License-Identifier:
+GPL-3.0-only). See Rendering/LICENSE.
+
+Vita client: all other Bloxicon-authored code, source modifications, build
+scripts, branding and documentation in this repository are licensed under the
+Bloxicon Source-Available License 1.1 (SPDX-License-Identifier:
+LicenseRef-Bloxicon-Source-Available-1.1). See LICENSE.
+
+Modifications, new clients and other projects based on the Vita client, and
+any use of the Bloxicon name or branding, need the owner's written permission
+first. Requests are made per base and discussed with the owner through a
+"Permission request" issue in this repository. Approved projects must publish
+their complete source code publicly under the same license whenever they
+release a build or run it as a service.
 
 Third-party components retain their original copyright notices and licenses.
-See THIRD_PARTY_NOTICES.md. This license does not grant rights to separately
+See THIRD_PARTY_NOTICES.md. These licenses do not grant rights to separately
 obtained engine baselines, original places, runtime data or game assets.
